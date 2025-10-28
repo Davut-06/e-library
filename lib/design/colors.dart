@@ -14,3 +14,7 @@ const Color textPrimaryColor = Color(0xFF7C8FAC);
 const Color iconColor = Color(0xFFC8D7F1);
 
 const Color searchColor = Color(0xFFEAEFF4);
+
+const Color activeColor = Color(0xFF5D87FF);
+
+const Color inactiveBorderColor = Color(0xFFC8D7F1);

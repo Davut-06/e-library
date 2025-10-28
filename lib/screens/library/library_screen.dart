@@ -24,8 +24,17 @@ class LibraryScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new),
+          color: iconColor,
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        titleSpacing: 8.0,
         title: const Text(
           'Library',
+
           style: TextStyle(
             color: secondaryColor,
             fontSize: 16,
@@ -40,7 +49,7 @@ class LibraryScreen extends StatelessWidget {
           children: [
             const SizedBox(height: 10),
 
-            // 🔍 Search bar + filter button
+            // Search bar + filter button
             const LibrarySearchBar(),
 
             const SizedBox(height: 20),

@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-// Импорт цветов
-// Если нужно
 import 'screens/library/library_screen.dart';
 
 void main() {

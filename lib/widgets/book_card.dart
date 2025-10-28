@@ -23,7 +23,7 @@ class BookCard extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'The book of art',
-            maxLines: 1,
+            maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontWeight: FontWeight.w600,
