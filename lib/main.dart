@@ -13,6 +13,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Library UI',
+      theme: ThemeData(
+        fontFamily: 'Plus Jakarta Sans',
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.grey),
+        useMaterial3: true,
+      ),
       home: const LibraryScreen(),
     );
   }
