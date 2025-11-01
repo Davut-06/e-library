@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:e_library/design/colors.dart';
+import '../library/filter_screen.dart';
 
 class LibrarySearchBar extends StatelessWidget {
   const LibrarySearchBar({super.key});
@@ -41,7 +42,12 @@ class LibrarySearchBar extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         IconButton(
-          onPressed: () {},
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const FilterScreen()),
+            );
+          },
           icon: Image.asset('assets/icons/filter.jpg', width: 40, height: 40),
         ),
       ],

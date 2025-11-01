@@ -18,13 +18,11 @@ class SectionBooksScreen extends StatefulWidget {
 }
 
 class _SectionBooksScreenState extends State<SectionBooksScreen> {
-  // Объявляем Future, который будет хранить данные.
   late Future<List<Book>> _booksFuture;
 
   @override
   void initState() {
     super.initState();
-    // Инициализируем Future, запуская запрос к API.
     _booksFuture = ApiService().fetchBooks();
   }
 
@@ -182,7 +180,7 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
                   itemCount: books.length,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4,
-                    childAspectRatio: 0.50,
+                    childAspectRatio: 0.45,
                     crossAxisSpacing: 16.0,
                     mainAxisSpacing: 16.0,
                   ),
@@ -193,8 +191,8 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
               },
             ),
           ),
-        ], // End of Column children
-      ), // End of Scaffold body
-    ); // End of Scaffold
-  } // End of build method
-} //
+        ],
+      ),
+    );
+  }
+}

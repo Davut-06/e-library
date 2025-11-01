@@ -4,6 +4,7 @@ import 'section_books_screen.dart';
 import '../../widgets/section_header.dart';
 import 'book_list.dart';
 import 'search_bar.dart';
+import 'package:e_library/screens/library/filter_screen.dart';
 
 class LibraryScreen extends StatelessWidget {
   const LibraryScreen({super.key});
@@ -19,6 +20,10 @@ class LibraryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const popularTitle = 'Popular';
+    const newTitle = 'New';
+    const storiesTitle = 'Strories';
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -56,22 +61,25 @@ class LibraryScreen extends StatelessWidget {
 
             // 📚 Section: Popular
             SectionHeader(
-              title: 'Popular',
-              onTap: () => navigateToSection(context, 'Popular'),
+              title: popularTitle,
+              onTap: () => navigateToSection(context, popularTitle),
             ),
-            const BookList(),
+            const BookList(sectionTitle: popularTitle),
+            const SizedBox(height: 20),
 
             SectionHeader(
-              title: 'New',
-              onTap: () => navigateToSection(context, 'New'),
+              title: newTitle,
+              onTap: () => navigateToSection(context, newTitle),
             ),
-            const BookList(),
+            const BookList(sectionTitle: newTitle),
+            const SizedBox(height: 20),
 
             SectionHeader(
-              title: 'Stories',
-              onTap: () => navigateToSection(context, 'Stories'),
+              title: storiesTitle,
+              onTap: () => navigateToSection(context, storiesTitle),
             ),
-            const BookList(),
+            const BookList(sectionTitle: storiesTitle),
+            const SizedBox(height: 20),
           ],
         ),
       ),
