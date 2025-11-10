@@ -29,13 +29,14 @@ class LibraryScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
+        /* leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new),
           color: iconColor,
           onPressed: () {
             Navigator.pop(context);
           },
         ),
+        */
         titleSpacing: 8.0,
         title: const Text(
           'Library',
