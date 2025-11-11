@@ -37,7 +37,7 @@ class BookDetailScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
             Text(
-              dummyDescription,
+              book.description,
               style: TextStyle(
                 fontSize: 15,
                 height: 1.5,
@@ -120,13 +120,17 @@ class BookDetailScreen extends StatelessWidget {
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         elevation: 0,
                       ),
                       child: const Text(
                         'Download',
-                        style: TextStyle(fontSize: 12, color: backgroundColor),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: backgroundColor,
+                        ),
                       ),
                     ),
                   ),
@@ -139,13 +143,17 @@ class BookDetailScreen extends StatelessWidget {
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         elevation: 0,
                       ),
                       child: const Text(
                         'Read online',
-                        style: TextStyle(fontSize: 12, color: backgroundColor),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: backgroundColor,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -164,7 +172,7 @@ class BookDetailScreen extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4.0),
       child: RichText(
         text: TextSpan(
-          style: const TextStyle(fontSize: 14, color: Colors.red),
+          style: const TextStyle(fontSize: 14, color: secondaryColor),
           children: <TextSpan>[
             TextSpan(
               text: '$label: ',
@@ -186,7 +194,11 @@ class BookDetailScreen extends StatelessWidget {
       children: [
         const Text(
           'Recommendations',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: secondaryVariantColor,
+          ),
         ),
         TextButton(
           onPressed: () {},
