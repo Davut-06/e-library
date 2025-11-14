@@ -2,6 +2,8 @@ import 'package:e_library/design/colors.dart';
 import 'package:flutter/material.dart';
 import '../models/book_models.dart';
 import '../screens/BookDetailScreen.dart';
+import '../screens/pdf_reader_screen.dart';
+import '../screens/BookDetailScreen.dart';
 
 class BookCard extends StatelessWidget {
   final Book book;
@@ -10,7 +12,7 @@ class BookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: () {
         Navigator.push(
           context,

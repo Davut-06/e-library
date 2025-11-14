@@ -1,6 +1,7 @@
 import 'package:e_library/design/colors.dart';
 import 'package:e_library/models/book_models.dart';
 import 'package:flutter/material.dart';
+import '../screens/pdf_reader_screen.dart';
 
 class BookDetailScreen extends StatelessWidget {
   final Book book;
@@ -137,7 +138,17 @@ class BookDetailScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => PdfDownloadAndReaderScreen(
+                              bookId: book.id.toString(),
+                              bookTitle: book.title,
+                            ),
+                          ),
+                        );
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: activeColor,
                         foregroundColor: Colors.white,
