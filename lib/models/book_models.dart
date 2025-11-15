@@ -35,6 +35,7 @@ class Book {
   final int year;
   final int language;
   final int viewCount;
+  final String? fileUrl;
 
   Book({
     required this.id,
@@ -47,6 +48,7 @@ class Book {
     required this.year,
     required this.language,
     required this.viewCount,
+    this.fileUrl,
   });
 
   factory Book.fromJson(Map<String, dynamic> json) {
@@ -63,6 +65,7 @@ class Book {
       year: json['year'] as int,
       language: json['language'] as int,
       viewCount: json['view_count'] as int,
+      fileUrl: json['file'] as String?,
     );
   }
 }

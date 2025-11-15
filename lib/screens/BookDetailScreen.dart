@@ -139,15 +139,28 @@ class BookDetailScreen extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PdfDownloadAndReaderScreen(
-                              bookId: book.id.toString(),
-                              bookTitle: book.title,
+                        // Проверяем, существует ли URL файла
+                        if (book.fileUrl != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => PdfReaderScreen(
+                                // Передаем URL PDF-файла в экран читалки
+                                pdfUrl: book.fileUrl!,
+                                bookTitle: book.title,
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        } else {
+                          // Если файла нет, можно вывести сообщение или диалог
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Файл для чтения онлайн недоступен.',
+                              ),
+                            ),
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: activeColor,
