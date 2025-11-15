@@ -1,6 +1,7 @@
 import 'package:e_library/design/colors.dart';
 import 'package:e_library/models/book_models.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../screens/pdf_reader_screen.dart';
 
 class BookDetailScreen extends StatelessWidget {
@@ -141,16 +142,17 @@ class BookDetailScreen extends StatelessWidget {
                       onPressed: () {
                         // Проверяем, существует ли URL файла
                         if (book.fileUrl != null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => PdfReaderScreen(
-                                // Передаем URL PDF-файла в экран читалки
-                                pdfUrl: book.fileUrl!,
-                                bookTitle: book.title,
-                              ),
-                            ),
-                          );
+                          // Navigator.push(
+                          //   context,
+                          //   MaterialPageRoute(
+                          //     builder: (context) => PdfReaderScreen(
+                          //       // Передаем URL PDF-файла в экран читалки
+                          //       pdfUrl: book.fileUrl!,
+                          //       bookTitle: book.title,
+                          //     ),
+                          //   ),
+                          // );
+                          launchUrl(Uri.parse(book.fileUrl!));
                         } else {
                           // Если файла нет, можно вывести сообщение или диалог
                           ScaffoldMessenger.of(context).showSnackBar(

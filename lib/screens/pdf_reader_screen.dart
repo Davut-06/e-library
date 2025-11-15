@@ -25,6 +25,8 @@ class PdfReaderScreen extends StatelessWidget {
       ),
       // ✅ ИСПОЛЬЗУЕМ SfPdfViewer.network()
       body: SfPdfViewer.network(
+        onDocumentLoadFailed: (details) =>
+            print('Ошибка загрузки PDF: ${details.error}'),
         pdfUrl, // Передаем URL файла, который мы получили
         // Можно добавить логику загрузки, если нужно:
         // onDocumentLoadFailed: (details) {

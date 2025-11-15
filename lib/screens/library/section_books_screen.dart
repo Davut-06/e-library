@@ -19,11 +19,23 @@ class SectionBooksScreen extends StatefulWidget {
 
 class _SectionBooksScreenState extends State<SectionBooksScreen> {
   late Future<List<Book>> _booksFuture;
+  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
     _booksFuture = ApiService().fetchBooks();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      // Здесь можно реализовать логику подгрузки дополнительных данных
+      // Например, вызвать метод для загрузки следующей страницы книг
+      print('Достигнут конец списка, можно подгружать еще книги');
+    }
   }
 
   void _openFilter(BuildContext context) {
@@ -172,21 +184,26 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
                 // 4. Состояние отображения данных
                 final List<Book> books = snapshot.data!;
 
-                return GridView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 0,
+                return Scrollbar(
+                  controller: _scrollController,
+                  child: GridView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 0,
+                    ),
+                    itemCount: books.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 3 / 4,
+                          crossAxisSpacing: 16.0,
+                          mainAxisSpacing: 16.0,
+                        ),
+                    itemBuilder: (context, index) {
+                      return BookCard(book: books[index]);
+                    },
                   ),
-                  itemCount: books.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 0.45,
-                    crossAxisSpacing: 16.0,
-                    mainAxisSpacing: 16.0,
-                  ),
-                  itemBuilder: (context, index) {
-                    return BookCard(book: books[index]);
-                  },
                 );
               },
             ),
