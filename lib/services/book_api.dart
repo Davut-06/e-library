@@ -4,85 +4,68 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 class BookApi {
-  // 🚨 ИЗМЕНЕНИЕ: Используем ваш локальный URL
-  // Указываем базовый URL БЕЗ параметра пагинации (Dio добавит его)
-  static const String _baseUrl = 'http://192.168.100.202/api/books/?page=2';
+  // Базовый URL
+  static const String _baseUrl =
+      'http://192.168.100.202/api/books/'; //'http://217.174.233.210:20001/api/books/';  //'http://192.168.100.202/api/books/';
   final Dio _dio;
-
-  // Константа для числа страниц
-  static const int _fixedTotalPages = 11;
 
   BookApi(this._dio);
 
   // -----------------------------------------------------------------
-  // НОВЫЙ МЕТОД: Загружает все книги с 1 по 11 страницу
+  // МЕТОД 1: НАДЕЖНАЯ ПАГИНАЦИЯ (fetchAllBooksReliably)
   // -----------------------------------------------------------------
-  Future<List<Book>> fetchAllBooks() async {
+  Future<List<Book>> fetchAllBooksReliably() async {
     List<Book> allBooks = [];
+    String? nextUrl = _baseUrl; // Начинаем с базового URL (страница 1)
 
-    for (int page = 1; page <= _fixedTotalPages; page++) {
+    while (nextUrl != null) {
       try {
-        // Вызываем существующий метод для получения одной страницы
-        final BookListResponse response = await fetchBooks(page: page);
+        print('Fetching books from URL: $nextUrl');
 
-        // ✅ ИСПРАВЛЕНИЕ ОШИБКИ: Используем 'results' (как в BookListResponse)
-        allBooks.addAll(response.results);
+        final Response response = await _dio.get(nextUrl);
 
-        print(
-          'Successfully fetched page: $page. Total books: ${allBooks.length}',
-        );
+        if (response.statusCode == 200) {
+          final BookListResponse pageResponse = BookListResponse.fromJson(
+            response.data,
+          );
 
-        // Опционально: Если API присылает null в 'next' на последней странице,
-        // можно прервать цикл раньше, если response.next == null.
-        if (response.next == null && page < _fixedTotalPages) {
-          print('Next page link is null. Breaking cycle early.');
+          allBooks.addAll(pageResponse.results);
+
+          // Получаем ссылку на следующую страницу или null
+          nextUrl = pageResponse.next;
+
+          print(
+            'Successfully loaded ${pageResponse.results.length} books. Total: ${allBooks.length}. Next: ${nextUrl == null ? "END" : "YES"}',
+          );
+        } else {
+          print(
+            'API returned non-200 status: ${response.statusCode}. Stopping pagination.',
+          );
           break;
         }
-      } on Exception catch (e) {
-        print('Error fetching page $page: $e');
-        // Если произошла ошибка, прерываем цикл, чтобы не нагружать API
+      } on DioException catch (e) {
+        print('🚨 Dio Error while fetching $nextUrl: ${e.message}. Stopping.');
+        break;
+      } catch (e) {
+        print('🚨 Parsing Error: $e. Stopping pagination.');
         break;
       }
     }
 
+    print('All books loaded. Total count: ${allBooks.length}');
     return allBooks;
   }
 
   // -----------------------------------------------------------------
-
-  /// 🌐 Получает список книг с пагинацией
-  /// @param page: Номер страницы для загрузки (по умолчанию 1)
-  Future<BookListResponse> fetchBooks({int page = 1}) async {
-    // В Dio мы можем использовать _baseUrl, а путь оставить пустым,
-    // если _baseUrl уже содержит конечную точку '/api/books/'
-    final String path = '';
-
-    try {
-      final Response response = await _dio.get(
-        _baseUrl +
-            path, // Полный URL будет http://192.168.100.202/api/books/?page=X
-        queryParameters: {'page': page},
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = response.data;
-        return BookListResponse.fromJson(data);
-      } else {
-        throw Exception(
-          'Failed to load books. Status code: ${response.statusCode}',
-        );
-      }
-    } on DioException catch (e) {
-      throw Exception('Network error or API call failed: ${e.message}');
-    }
-  }
-
+  // МЕТОД 2: ДЕТАЛИ КНИГИ (fetchBookDetails)
+  // -----------------------------------------------------------------
   /// 🔎 Получает одну книгу по ее ID
   Future<Book> fetchBookDetails(int bookId) async {
     // Используем относительный путь от _baseUrl
     final String path = '$bookId/';
 
     try {
+      // ✅ ИСПОЛЬЗУЕМ _baseUrl + path
       final Response response = await _dio.get(_baseUrl + path);
 
       if (response.statusCode == 200) {
@@ -98,6 +81,9 @@ class BookApi {
     }
   }
 
+  // -----------------------------------------------------------------
+  // МЕТОД 3: СКАЧИВАНИЕ PDF (downloadPdfFile)
+  // -----------------------------------------------------------------
   // 📥 Скачивает PDF-файл по ID книги
   Future<File> downloadPdfFile(String bookId) async {
     final String path = '$bookId/pdf';
@@ -105,6 +91,7 @@ class BookApi {
     final String savePath = '${dir.path}/$bookId.pdf';
 
     try {
+      // ✅ ИСПОЛЬЗУЕМ _baseUrl + path
       await _dio.download(
         _baseUrl + path,
         savePath,
@@ -123,4 +110,4 @@ class BookApi {
       );
     }
   }
-}
+} // <-- Теперь все методы внутри этой скобки.

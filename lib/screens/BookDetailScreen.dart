@@ -2,6 +2,7 @@ import 'package:e_library/design/colors.dart';
 import 'package:e_library/models/book_models.dart';
 import 'package:flutter/material.dart';
 import '../screens/pdf_reader_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class BookDetailScreen extends StatelessWidget {
   final Book book;
@@ -151,6 +152,7 @@ class BookDetailScreen extends StatelessWidget {
                               ),
                             ),
                           );
+                          launchUrl(Uri.parse(book.fileUrl!));
                         } else {
                           // Если файла нет, можно вывести сообщение или диалог
                           ScaffoldMessenger.of(context).showSnackBar(

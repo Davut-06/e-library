@@ -6,11 +6,47 @@ import 'package:path_provider/path_provider.dart';
 
 class ApiService {
   static const String _baseUrl = 'http://192.168.100.202/api';
+  //  'http:217.174.233.210:20001/api'; 'http://192.168.100.202/api';
   static const String _booksEndpoint = '/books/';
   // Используется для формирования URL скачивания: /api/books/{bookId}/pdf
   static const String _pdfDownloadEndpoint = '/books/';
 
   final Dio _dio = Dio();
+
+  Future<List<Book>> fetchAllBooks() async {
+    List<Book> allBooks = [];
+    String? nextUrl = '$_baseUrl$_booksEndpoint'; // Начинаем с первой страницы
+
+    try {
+      // Цикл продолжается, пока есть URL для следующей страницы
+      while (nextUrl != null) {
+        print('Fetching books from URL: $nextUrl');
+
+        final Response response = await _dio.get(nextUrl!);
+
+        if (response.statusCode == 200) {
+          final Map<String, dynamic> jsonResponse = response.data;
+          final responseModel = BookListResponse.fromJson(jsonResponse);
+
+          // 1. Добавляем полученные книги в общий список
+          allBooks.addAll(responseModel.results);
+
+          // 2. Обновляем nextUrl для следующей итерации
+          nextUrl = responseModel.next;
+        } else {
+          // Обработка ошибки
+          throw Exception(
+            'Error loading page from server: ${response.statusCode}',
+          );
+        }
+      }
+    } on DioException catch (e) {
+      print('Dio Error during batch fetch: ${e.message}');
+      throw Exception('Network error during batch fetch: ${e.message}');
+    }
+
+    return allBooks;
+  }
 
   // 1. Метод для получения списка книг (ваш существующий код)
   Future<List<Book>> fetchBooks() async {

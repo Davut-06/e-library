@@ -3,6 +3,8 @@ import 'package:e_library/models/book_models.dart';
 import 'package:e_library/services/api_services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'dart:async';
+import '../library/search_bar.dart'; // ✅ Импортируем наш SearchBar
 
 import '../../widgets/book_card.dart';
 import 'filter_screen.dart';
@@ -18,18 +20,96 @@ class SectionBooksScreen extends StatefulWidget {
 }
 
 class _SectionBooksScreenState extends State<SectionBooksScreen> {
+  // --- НОВЫЕ ПОЛЯ ДЛЯ ПОИСКА И ФИЛЬТРАЦИИ ---
+  List<Book> _allSectionBooks =
+      []; // Все загруженные книги раздела (для фильтрации)
+  List<Book> _filteredBooks = []; // Список для отображения
+  bool _isSearching = false; // Состояние поиска
+
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce; // Для Debouncing
+
+  // --- СТАРЫЕ ПОЛЯ ---
   late Future<List<Book>> _booksFuture;
 
   @override
   void initState() {
     super.initState();
+    // ⚠️ В идеале здесь должен быть вызов API, который фильтрует по widget.sectionTitle.
+    // Пока оставим fetchBooks(), но в рабочем приложении это нужно изменить.
     _booksFuture = ApiService().fetchBooks();
+  }
+
+  void _filterBooks(String query) {
+    final bool shouldSearch = query.isNotEmpty;
+
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _isSearching = shouldSearch;
+
+        if (shouldSearch) {
+          final lowerCaseQuery = query.toLowerCase();
+          _filteredBooks = _allSectionBooks.where((book) {
+            final bookTitle = book.title.toLowerCase();
+            final bookAuthor = book.author.name.toLowerCase();
+
+            return bookTitle.contains(lowerCaseQuery) ||
+                bookAuthor.contains(lowerCaseQuery);
+          }).toList();
+        } else {
+          // Если запрос пуст, сбрасываем фильтр до полного списка
+          _filteredBooks = _allSectionBooks;
+        }
+      });
+    });
   }
 
   void _openFilter(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const FilterScreen()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildContent(List<Book> allBooks) {
+    // 1. ✅ ИСПРАВЛЕНО: Правильная проверка на пустоту и инициализация списков
+    if (_allSectionBooks.isEmpty) {
+      _allSectionBooks = allBooks;
+      _filteredBooks = allBooks;
+    }
+
+    // 2. Определяем, какой список отображать
+    final booksToDisplay = _isSearching ? _filteredBooks : _allSectionBooks;
+
+    // 3. Сообщения об отсутствии результатов
+    if (booksToDisplay.isEmpty && _isSearching) {
+      return const Center(child: Text('По вашему запросу ничего не найдено.'));
+    }
+    if (booksToDisplay.isEmpty && !_isSearching) {
+      return const Center(child: Text('Книги в этом разделе не найдены.'));
+    }
+
+    // 4. Отображение списка книг
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0),
+      itemCount: booksToDisplay.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 0.45,
+        crossAxisSpacing: 16.0,
+        mainAxisSpacing: 16.0,
+      ),
+      itemBuilder: (context, index) {
+        return BookCard(book: booksToDisplay[index]);
+      },
     );
   }
 
@@ -55,85 +135,14 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                      hintText: 'Search',
-                      // ... (остальные стили InputDecoration)
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 16,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: Colors.grey,
-                          width: 1.0,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: Colors.grey,
-                          width: 1.0,
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: Colors.grey,
-                          width: 1.0,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Filter Button
-                GestureDetector(
-                  onTap: () => _openFilter(context),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(shape: BoxShape.circle),
-                    child: Center(
-                      child: Stack(
-                        children: [
-                          Image.asset(
-                            'assets/icons/filter.jpg',
-                            width: 40,
-                            height: 40,
-                          ),
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.blue.shade600,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 1.5,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            // ✅ ЗАМЕНА СТАРОГО TextField НА LibrarySearchBar
+            child: LibrarySearchBar(
+              onSearch: _filterBooks, // Передаем нашу функцию
+              controller: _searchController, // Для кнопки очистки
             ),
           ),
           const SizedBox(height: 16),
+          // ✅ ИСПРАВЛЕНО: Правильная структура FutureBuilder
           Expanded(
             child: FutureBuilder<List<Book>>(
               future: _booksFuture,
@@ -159,35 +168,12 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
                   );
                 }
 
-                // 3. Состояние отсутствия данных
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'Книги в этом разделе не найдены.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  );
+                // 3. Отображение контента (или сообщения об отсутствии данных)
+                if (snapshot.hasData) {
+                  return _buildContent(snapshot.data!);
                 }
 
-                // 4. Состояние отображения данных
-                final List<Book> books = snapshot.data!;
-
-                return GridView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 0,
-                  ),
-                  itemCount: books.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 0.45,
-                    crossAxisSpacing: 16.0,
-                    mainAxisSpacing: 16.0,
-                  ),
-                  itemBuilder: (context, index) {
-                    return BookCard(book: books[index]);
-                  },
-                );
+                return const SizedBox.shrink();
               },
             ),
           ),

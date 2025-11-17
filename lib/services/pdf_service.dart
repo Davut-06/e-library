@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 
 final Dio _dio = Dio();
 const String _baseUrl = 'http://192.168.100.202/api';
+//'http://217.174.233.210:20001/api'; //'http://192.168.100.202/api';
 
 Future<File> downloadPdfFileWithDio(String bookId) async {
   final String apiUrl = '$_baseUrl/v1/books/$bookId/pdf';
