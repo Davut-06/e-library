@@ -1,69 +1,54 @@
-import 'package:e_library/design/colors.dart';
-import 'package:e_library/models/book_models.dart';
-import 'package:e_library/services/api_services.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
+import '../../models/book_models.dart';
+// ! Убедитесь, что BookCard импортирован правильно
 import '../../widgets/book_card.dart';
+import '../BookDetailScreen.dart'; // Предполагаемый импорт для навигации
 
-class BookList extends StatefulWidget {
-  const BookList({super.key, required String sectionTitle});
+class BookList extends StatelessWidget {
+  final List<Book> books;
 
-  @override
-  State<BookList> createState() => _BookListState();
-}
+  const BookList({super.key, required this.books});
 
-class _BookListState extends State<BookList> {
-  // Переменная для хранения Future, которое будет загружать книги
-
-  late Future<List<Book>> _booksFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _booksFuture = ApiService().fetchAllBooks();
+  // Вспомогательный метод для навигации к деталям
+  void _navigateToBookDetailsScreen(BuildContext context, Book book) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => BookDetailScreen(book: book)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    const double listHeight = 220;
+    // ! 1. Удален лишний itemBuilder вне класса
 
+    if (books.isEmpty) {
+      return const Center(child: Text('Нет книг в этой секции.'));
+    }
+
+    // Создаем горизонтальный список из переданных книг
     return SizedBox(
-      height: listHeight,
-      child: FutureBuilder<List<Book>>(
-        future: _booksFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: SpinKitFadingCircle(color: secondaryColor, size: 30.0),
-            );
-          }
+      height: 250,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: books.length,
+        // ! 2. itemBuilder корректно расположен внутри ListView.builder
+        itemBuilder: (context, index) {
+          final book = books[index];
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                'Ошибка загрузки: ${snapshot.error}',
-                style: const TextStyle(color: Colors.red),
+          return Padding(
+            padding: const EdgeInsets.only(left: 16.0),
+            // Используем GestureDetector, чтобы сделать карточку кликабельной
+            child: GestureDetector(
+              onTap: () => _navigateToBookDetailsScreen(context, book),
+              child: SizedBox(
+                width: 120,
+                // ! 3. Использование вашего виджета BookCard
+                child: BookCard(book: book),
+
+                // ! Если BookCard требует только URL, используйте:
+                // child: BookCard(coverUrl: book.thumbnailUrl, title: book.title),
               ),
-            );
-          }
-
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-              child: Text('Нет доступных книг в этом разделе.'),
-            );
-          }
-
-          final List<Book> books = snapshot.data!;
-
-          return ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: books.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: SizedBox(width: 90, child: BookCard(book: books[index])),
-              );
-            },
+            ),
           );
         },
       ),

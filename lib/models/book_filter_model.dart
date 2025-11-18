@@ -7,6 +7,8 @@ class BookFilterModel {
   final String? type;
   final String? authorName;
   final String? search;
+  final int? categoryId;
+  final String? categorySlug;
 
   BookFilterModel({
     this.genres = const [],
@@ -15,12 +17,22 @@ class BookFilterModel {
     this.type,
     this.authorName,
     this.search,
+    this.categoryId,
+    this.categorySlug,
   });
 
   /// Преобразует модель фильтра в Map, готовый для передачи в Dio
   /// как queryParameters. Ключи должны соответствовать API (например, 'genre', 'year_from').
   Map<String, dynamic> toQueryParams() {
     final Map<String, dynamic> params = {};
+
+    if (categoryId != null) {
+      params['category'] = categoryId.toString();
+    }
+
+    if (search != null && search!.isNotEmpty) {
+      params['search'] = Uri.encodeQueryComponent(search!);
+    }
 
     if (genres.isNotEmpty) {
       params['genre'] = genres.join(',');

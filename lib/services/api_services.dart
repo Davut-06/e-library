@@ -11,11 +11,71 @@ class ApiService {
   static const String _baseUrl = 'http://192.168.100.202/api';
   static const String _booksEndpoint = '/books/';
   static const String _pdfDownloadEndpoint = '/books/';
+  static const String _categoriesEndpoint = '/books/categories/';
 
   final Dio _dio = Dio();
 
   /// 🌐 Метод для получения всех книг с учетом пагинации и фильтра.
   ///
+
+  Future<BookListResponse> fetchBooksPage({
+    Map<String, dynamic>? initialQueryParams,
+    int? limit,
+    int offset = 0,
+  }) async {
+    final Map<String, dynamic> params = initialQueryParams ?? {};
+
+    // Добавляем пагинацию к параметрам
+    params['limit'] = (limit ?? 10).toString();
+    params['offset'] = offset.toString();
+
+    // Создаем URL, заменяя существующие queryParameters
+    // Мы используем _booksEndpoint, который уже определен
+    final String url = Uri.parse(_baseUrl + _booksEndpoint)
+        .replace(
+          queryParameters: params.map((k, v) => MapEntry(k, v.toString())),
+        )
+        .toString();
+
+    try {
+      print('Fetching page from URL: $url');
+      final Response response = await _dio.get(url);
+
+      if (response.statusCode == 200) {
+        // ! Используем модель BookListResponse, которая должна быть определена в book_models.dart
+        return BookListResponse.fromJson(response.data);
+      } else {
+        throw Exception('Error loading page: ${response.statusCode}');
+      }
+    } on DioException catch (e) {
+      print('Dio Error during page fetch: ${e.message}');
+      throw Exception('Network error during page fetch: ${e.message}');
+    }
+  }
+
+  Future<List<BookCategory>> fetchAllCategories() async {
+    final String url = _baseUrl + _categoriesEndpoint;
+
+    try {
+      final Response response = await _dio.get(url);
+
+      if (response.statusCode == 200) {
+        // Предполагается, что API возвращает чистый List<Map<String, dynamic>>
+        final List<dynamic> jsonList = response.data;
+
+        // ! Используем модель BookCategory, которая должна быть определена в book_models.dart
+        return jsonList
+            .map((json) => BookCategory.fromJson(json as Map<String, dynamic>))
+            .toList();
+      } else {
+        throw Exception('Failed to load categories: ${response.statusCode}');
+      }
+    } on DioException catch (e) {
+      print('Dio Error fetching categories: ${e.message}');
+      throw Exception('Network error fetching categories: ${e.message}');
+    }
+  }
+
   /// @param initialQueryParams: Карта параметров фильтра, полученная из BookFilterModel.
   Future<List<Book>> fetchAllBooks({
     Map<String, dynamic>? initialQueryParams,

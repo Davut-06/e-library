@@ -11,24 +11,29 @@ class Author {
   }
 }
 
-// Модель для категории книги
+// ! ИСПРАВЛЕННАЯ Модель для категории книги
 class BookCategory {
+  final int id;
   final String name;
+  final String slug;
 
-  BookCategory({required this.name});
+  BookCategory({required this.name, required this.id, required this.slug});
 
   factory BookCategory.fromJson(Map<String, dynamic> json) {
-    return BookCategory(name: json['name'] as String);
+    return BookCategory(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      slug: json['slug'] as String,
+    );
   }
 }
 
 // Основная модель для одной книги
 class Book {
   final int id;
-  final String title; // Соответствует полю 'name' в JSON
+  final String title;
   final String slug;
-  final String
-  thumbnailUrl; // Соответствует полю 'thumbnail' в JSON (URL обложки)
+  final String thumbnailUrl;
   final String description;
   final Author author;
   final BookCategory category;
@@ -52,16 +57,35 @@ class Book {
   });
 
   factory Book.fromJson(Map<String, dynamic> json) {
+    // ! Адаптация для обработки вложенной категории
+    final categoryJson = json['category'];
+    BookCategory parsedCategory;
+
+    if (categoryJson is int) {
+      // Если API возвращает только ID категории
+      // ! ИСПРАВЛЕНИЕ: Добавляем slug для соответствия конструктору
+      parsedCategory = BookCategory(
+        id: categoryJson,
+        name: 'Неизвестно',
+        slug: 'unknown',
+      );
+    } else if (categoryJson is Map<String, dynamic>) {
+      // Если API возвращает полный объект категории
+      parsedCategory = BookCategory.fromJson(categoryJson);
+    } else {
+      // Fallback
+      // ! ИСПРАВЛЕНИЕ: Добавляем slug для соответствия конструктору
+      parsedCategory = BookCategory(id: 0, name: 'Неизвестно', slug: 'unknown');
+    }
+
     return Book(
       id: json['id'] as int,
-      title: json['name'] as String, // ! Используем 'name'
+      title: json['name'] as String,
       slug: json['slug'] as String,
-      thumbnailUrl: json['thumbnail'] as String, // ! Используем 'thumbnail'
+      thumbnailUrl: json['thumbnail'] as String,
       description: json['description'] ?? 'Нет описания',
-      author: Author.fromJson(json['author']), // Парсим вложенный объект
-      category: BookCategory.fromJson(
-        json['category'],
-      ), // Парсим вложенный объект
+      author: Author.fromJson(json['author']),
+      category: parsedCategory, // Используем адаптированный объект
       year: json['year'] as int,
       language: json['language'] as int,
       viewCount: json['view_count'] as int,

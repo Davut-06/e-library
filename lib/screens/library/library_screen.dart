@@ -1,16 +1,21 @@
-//import 'package:e_library/models/book_filter_model.dart';
 import 'package:e_library/design/colors.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'section_books_screen.dart';
+import 'section_books_screen.dart'; // Экран "Смотреть все"
 import '../../widgets/section_header.dart';
-import 'book_list.dart'; // Предполагаемый импорт для отображения секций
-import 'search_bar.dart'; // Предполагаемый импорт для строки поиска
+import 'book_list.dart'; // Виджет для горизонтального списка книг
+import 'search_bar.dart'; // Виджет строки поиска
 import '../../services/api_services.dart';
 import '../../models/book_models.dart';
 import '../../models/book_filter_model.dart';
 import '../BookDetailScreen.dart';
-// import 'package:e_library/screens/library/filter_screen.dart'; // Если не используется, можно удалить
+
+// Вспомогательная структура для секции
+class SectionConfig {
+  final String title;
+  final BookFilterModel filter;
+  SectionConfig({required this.title, required this.filter});
+}
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -21,19 +26,15 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   final ApiService _apiService = ApiService();
+  late Future<List<BookCategory>> _categoriesFuture;
 
-  List<Book> _allBooks = [];
-  List<Book> _filteredBooks = [];
-  bool _isLoading = true;
+  // Флаги и состояние поиска
   bool _isSearching = false;
-
-  Timer? _debounce;
-
   BookFilterModel _currentFilter = BookFilterModel();
 
-  final popularTitle = 'Popular';
-  final newTitle = 'New';
-  final storiesTitle = 'Strories';
+  // Добавьте импорт BookListResponse, если он не импортирован выше
+  Future<dynamic>? _searchResultsFuture;
+  Timer? _debounce;
 
   @override
   void dispose() {
@@ -44,118 +45,189 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _categoriesFuture = _apiService.fetchAllCategories();
   }
 
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-    });
-    try {
-      final books = await _apiService.fetchAllBooks();
-      setState(() {
-        _allBooks = books;
-        _filteredBooks = books;
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('Error loading data: $e');
-      setState(() {
-        _isLoading = false;
-        // Можно добавить логику, чтобы показать ошибку пользователю
-        _allBooks = [];
-      });
-    }
-  }
-
-  void _filterBooks(String query) {
+  // ********************************************
+  // * МЕТОД: Логика поиска через API с Debounce
+  // ********************************************
+  void _runApiSearch(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
+    // Выход из режима поиска, если строка пуста
+    if (query.trim().isEmpty) {
+      setState(() {
+        _isSearching = false;
+        _searchResultsFuture = null;
+      });
+      return;
+    }
+
+    // Запускаем поиск через 300 мс после последнего ввода
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      final lowerCaseQuery = query.toLowerCase().trim();
+      final filter = BookFilterModel(search: query.trim());
 
       setState(() {
-        _isSearching = lowerCaseQuery.isNotEmpty;
-
-        if (lowerCaseQuery.isEmpty) {
-          _filteredBooks = _allBooks;
-        } else {
-          _filteredBooks = _allBooks.where((book) {
-            final titleMatches = book.title.toLowerCase().contains(
-              lowerCaseQuery,
-            );
-            final authorMatches = book.author.name.toLowerCase().contains(
-              lowerCaseQuery,
-            );
-            return titleMatches || authorMatches;
-          }).toList();
-        }
+        _isSearching = true;
+        _searchResultsFuture = _apiService.fetchBooksPage(
+          initialQueryParams: filter.toQueryParams(),
+          limit: 50,
+          offset: 0,
+        );
       });
     });
+  }
+
+  // Метод перехода на экран "Смотреть все"
+  void navigateToSection(
+    BuildContext context,
+    String title,
+    BookFilterModel filter,
+  ) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            SectionBooksScreen(sectionTitle: title, initialFilter: filter),
+      ),
+    );
   }
 
   void _handleFilterApplied(BookFilterModel newFilter) {
     setState(() {
       _currentFilter = newFilter;
-      _isSearching = false;
-      _filteredBooks = _allBooks;
     });
-  }
-
-  void navigateToSection(BuildContext context, String title) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SectionBooksScreen(sectionTitle: title),
-      ),
-    );
-  }
-
-  // 💡 НОВЫЙ МЕТОД: Условное отображение контента
-  Widget _buildContent() {
-    // 1. Если идет загрузка, показываем индикатор
-    if (_isLoading) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.only(top: 50.0),
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    // 2. Если включен поиск, показываем результаты поиска
+    // Если поиск активен, перезапускаем его с новым фильтром
     if (_isSearching) {
-      return BookSearchResultsList(books: _filteredBooks);
+      _runApiSearch(_currentFilter.search ?? '');
     }
+  }
 
-    // 3. Показываем стандартные секции (только если не ищем)
+  // ********************************************
+  // * МЕТОД: Построение секции (загрузка 10 книг)
+  // ********************************************
+  Widget _buildSection(BuildContext context, SectionConfig section) {
+    // ! СОХРАНЕННАЯ ЗАДЕРЖКА: Используем для предотвращения перегрузки API.
+    final int delayMs = (section.title.hashCode % 300).abs() + 50;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 📚 Section: Popular
         SectionHeader(
-          title: popularTitle,
-          onTap: () => navigateToSection(context, popularTitle),
+          title: section.title,
+          onTap: () =>
+              navigateToSection(context, section.title, section.filter),
         ),
-        BookList(sectionTitle: popularTitle), // Используем твой виджет BookList
-        const SizedBox(height: 20),
 
-        // 📚 Section: New
-        SectionHeader(
-          title: newTitle,
-          onTap: () => navigateToSection(context, newTitle),
-        ),
-        BookList(sectionTitle: newTitle),
-        const SizedBox(height: 20),
+        SizedBox(
+          height: 250,
+          child: FutureBuilder<dynamic>(
+            // Используем dynamic, чтобы избежать проблем с типами, если BookListResponse не импортирован
+            // Оборачиваем вызов Future в Future.delayed
+            future: Future.delayed(Duration(milliseconds: delayMs), () {
+              return _apiService.fetchBooksPage(
+                initialQueryParams: section.filter.toQueryParams(),
+                limit: 10,
+              );
+            }),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                // Более информативное сообщение об ошибке API
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      'Ошибка загрузки: ${section.title} временно недоступна (503).',
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }
 
-        // 📚 Section: Stories
-        SectionHeader(
-          title: storiesTitle,
-          onTap: () => navigateToSection(context, storiesTitle),
+              final books = snapshot.data?.results ?? [];
+
+              if (books.isEmpty) {
+                return const Center(child: Text('Книги не найдены.'));
+              }
+
+              return BookList(books: books);
+            },
+          ),
         ),
-        BookList(sectionTitle: storiesTitle),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
       ],
+    );
+  }
+
+  // ********************************************
+  // * МЕТОД: Условное отображение контента
+  // ********************************************
+  Widget _buildContent() {
+    // 1. Если активен поиск, отображаем FutureBuilder с результатами
+    if (_isSearching && _searchResultsFuture != null) {
+      return FutureBuilder<dynamic>(
+        future: _searchResultsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.only(top: 50.0),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Ошибка поиска: ${snapshot.error}'));
+          }
+
+          final books = snapshot.data?.results ?? [];
+          return BookSearchResultsList(books: books);
+        },
+      );
+    }
+
+    // 2. Если поиск неактивен, отображаем категории
+    return FutureBuilder<List<BookCategory>>(
+      future: _categoriesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.only(top: 50.0),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Ошибка загрузки категорий: ${snapshot.error}'),
+          );
+        }
+
+        final categories = snapshot.data ?? [];
+
+        // ГЕНЕРАЦИЯ SectionConfig
+        final List<SectionConfig> librarySections = categories.map((cat) {
+          return SectionConfig(
+            title: cat.name,
+            // ! КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Возвращаем поиск по имени.
+            // ! Это устранит проблемы, если API не принимает categoryId для фильтрации книг.
+            // ! (Требует Uri.encodeQueryComponent в BookFilterModel.toQueryParams())
+            filter: BookFilterModel(search: cat.name),
+          );
+        }).toList();
+
+        // 3. Отображаем динамические секции
+        return Column(
+          children: librarySections.map((section) {
+            return _buildSection(context, section);
+          }).toList(),
+        );
+      },
     );
   }
 
@@ -183,16 +255,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
           children: [
             const SizedBox(height: 10),
 
-            // 1. Search bar + filter button (Передаем функцию поиска)
+            // 1. Search bar + filter button
             LibrarySearchBar(
-              onSearch: _filterBooks,
+              onSearch: _runApiSearch, // Привязка к методу поиска API
               currentFilter: _currentFilter,
               onFilterApplied: _handleFilterApplied,
             ),
 
             const SizedBox(height: 20),
 
-            // 2. 💡 Вызываем метод, который условно отобразит нужный контент
+            // 2. Вызываем метод, который условно отобразит нужный контент
             _buildContent(),
           ],
         ),
@@ -201,7 +273,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 }
 
-// 🖼️ Виджет для отображения результатов поиска
+// 🖼️ Виджет для отображения результатов поиска (оставлен без изменений)
 class BookSearchResultsList extends StatelessWidget {
   final List<Book> books;
 
@@ -212,7 +284,6 @@ class BookSearchResultsList extends StatelessWidget {
       context,
       MaterialPageRoute(builder: (context) => BookDetailScreen(book: book)),
     );
-    print('Navigating to details for: ${book.title}');
   }
 
   @override
@@ -229,10 +300,8 @@ class BookSearchResultsList extends StatelessWidget {
       );
     }
 
-    // Используем Column, так как внешний виджет — ListView
     return Column(
       children: books.map((book) {
-        final coverUrl = book.thumbnailUrl;
         return Padding(
           padding: const EdgeInsets.only(bottom: 12.0),
           child: ListTile(
