@@ -4,12 +4,13 @@ import 'package:e_library/services/api_services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'dart:async';
-import '../library/search_bar.dart'; // ✅ Импортируем наш SearchBar
+import '../library/search_bar.dart';
+// ! Добавьте импорт модели фильтра
+import '../../models/book_filter_model.dart';
 
 import '../../widgets/book_card.dart';
 import 'filter_screen.dart';
 
-// SectionBooksScreen теперь StatefulWidget
 class SectionBooksScreen extends StatefulWidget {
   final String sectionTitle;
 
@@ -21,86 +22,141 @@ class SectionBooksScreen extends StatefulWidget {
 
 class _SectionBooksScreenState extends State<SectionBooksScreen> {
   // --- НОВЫЕ ПОЛЯ ДЛЯ ПОИСКА И ФИЛЬТРАЦИИ ---
-  List<Book> _allSectionBooks =
-      []; // Все загруженные книги раздела (для фильтрации)
-  List<Book> _filteredBooks = []; // Список для отображения
-  bool _isSearching = false; // Состояние поиска
-
+  BookFilterModel _currentFilter = BookFilterModel();
+  List<Book> _booksFromApi = [];
+  List<Book> _filteredBooks = [];
+  bool _isLoading = true;
   final TextEditingController _searchController = TextEditingController();
-  Timer? _debounce; // Для Debouncing
-
-  // --- СТАРЫЕ ПОЛЯ ---
-  late Future<List<Book>> _booksFuture;
+  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
-    // ⚠️ В идеале здесь должен быть вызов API, который фильтрует по widget.sectionTitle.
-    // Пока оставим fetchBooks(), но в рабочем приложении это нужно изменить.
-    _booksFuture = ApiService().fetchBooks();
+    _loadBooks();
+    _searchController.addListener(_onSearchChanged);
   }
 
-  void _filterBooks(String query) {
-    final bool shouldSearch = query.isNotEmpty;
+  // --- ЛОГИКА ЗАГРУЗКИ И ФИЛЬТРАЦИИ ---
 
+  // 1. Метод для загрузки книг через API (с учетом фильтра)
+  Future<void> _loadBooks({BookFilterModel? newFilter}) async {
+    if (newFilter != null) {
+      _currentFilter = newFilter;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _booksFromApi = [];
+      _filteredBooks = [];
+    });
+
+    try {
+      final Map<String, dynamic> params = _currentFilter.toQueryParams();
+
+      // Здесь вы можете добавить фильтрацию по разделу (widget.sectionTitle)
+      // params['section_title'] = widget.sectionTitle;
+
+      final List<Book> fetchedBooks = await ApiService().fetchAllBooks(
+        initialQueryParams: params,
+      );
+
+      setState(() {
+        _booksFromApi = fetchedBooks;
+        _applyLocalSearch(_searchController.text);
+      });
+    } catch (e) {
+      print('Ошибка загрузки книг с фильтром: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // 2. Метод для локального поиска (Debounced) - БЕЗ АРГУМЕНТОВ
+  void _onSearchChanged() {
+    final query = _searchController.text;
     if (_debounce?.isActive ?? false) _debounce!.cancel();
+
     _debounce = Timer(const Duration(milliseconds: 300), () {
       setState(() {
-        _isSearching = shouldSearch;
-
-        if (shouldSearch) {
-          final lowerCaseQuery = query.toLowerCase();
-          _filteredBooks = _allSectionBooks.where((book) {
-            final bookTitle = book.title.toLowerCase();
-            final bookAuthor = book.author.name.toLowerCase();
-
-            return bookTitle.contains(lowerCaseQuery) ||
-                bookAuthor.contains(lowerCaseQuery);
-          }).toList();
-        } else {
-          // Если запрос пуст, сбрасываем фильтр до полного списка
-          _filteredBooks = _allSectionBooks;
-        }
+        _applyLocalSearch(query);
       });
     });
   }
 
-  void _openFilter(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const FilterScreen()),
-    );
+  // ! ⚠️ ВОССТАНОВЛЕННАЯ ФУНКЦИЯ: Принимает String для LibrarySearchBar
+  void _handleSearchQuery(String query) {
+    // Мы игнорируем переданный 'query' и просто запускаем логику Debounce,
+    // которая сама прочитает актуальное значение из контроллера.
+    _onSearchChanged();
   }
 
+  // 3. Метод для применения локального поиска
+  void _applyLocalSearch(String query) {
+    if (query.isEmpty) {
+      _filteredBooks = _booksFromApi;
+    } else {
+      final lowerCaseQuery = query.toLowerCase();
+      _filteredBooks = _booksFromApi.where((book) {
+        final bookTitle = book.title.toLowerCase();
+        final bookAuthor = book.author.name.toLowerCase();
+
+        return bookTitle.contains(lowerCaseQuery) ||
+            bookAuthor.contains(lowerCaseQuery);
+      }).toList();
+    }
+  }
+
+  Future<void> _openFilter(BuildContext context) async {
+    final result = await Navigator.push<BookFilterModel>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FilterScreen(initialFilter: _currentFilter),
+      ),
+    );
+
+    // Если результат получен (т.е. пользователь нажал "Save")
+    if (result != null) {
+      _handleFilterApplied(result);
+    }
+  }
+
+  // 4. Метод для обработки результата из FilterScreen
+  void _handleFilterApplied(BookFilterModel newFilter) {
+    _loadBooks(newFilter: newFilter);
+  }
+
+  // ! ✅ ИСПРАВЛЕНИЕ: Оставлена только одна функция dispose()
   @override
   void dispose() {
     _debounce?.cancel();
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
 
-  Widget _buildContent(List<Book> allBooks) {
-    // 1. ✅ ИСПРАВЛЕНО: Правильная проверка на пустоту и инициализация списков
-    if (_allSectionBooks.isEmpty) {
-      _allSectionBooks = allBooks;
-      _filteredBooks = allBooks;
+  // --- UI КОНТЕНТ ---
+
+  Widget _buildContent() {
+    if (_isLoading) {
+      return const Center(
+        child: SpinKitFadingCircle(color: secondaryColor, size: 50.0),
+      );
     }
 
-    // 2. Определяем, какой список отображать
-    final booksToDisplay = _isSearching ? _filteredBooks : _allSectionBooks;
-
-    // 3. Сообщения об отсутствии результатов
-    if (booksToDisplay.isEmpty && _isSearching) {
-      return const Center(child: Text('По вашему запросу ничего не найдено.'));
-    }
-    if (booksToDisplay.isEmpty && !_isSearching) {
-      return const Center(child: Text('Книги в этом разделе не найдены.'));
+    if (_filteredBooks.isEmpty) {
+      final isSearchActive = _searchController.text.isNotEmpty;
+      final message = isSearchActive
+          ? 'По вашему запросу ничего не найдено.'
+          : 'Книги в этом разделе не найдены.';
+      return Center(child: Text(message));
     }
 
-    // 4. Отображение списка книг
+    // Отображение списка книг
     return GridView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0),
-      itemCount: booksToDisplay.length,
+      itemCount: _filteredBooks.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
         childAspectRatio: 0.45,
@@ -108,7 +164,7 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
         mainAxisSpacing: 16.0,
       ),
       itemBuilder: (context, index) {
-        return BookCard(book: booksToDisplay[index]);
+        return BookCard(book: _filteredBooks[index]);
       },
     );
   }
@@ -135,48 +191,16 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            // ✅ ЗАМЕНА СТАРОГО TextField НА LibrarySearchBar
             child: LibrarySearchBar(
-              onSearch: _filterBooks, // Передаем нашу функцию
-              controller: _searchController, // Для кнопки очистки
+              // ! ИСПРАВЛЕНИЕ: Используем функцию, которая принимает String
+              onSearch: _handleSearchQuery,
+              controller: _searchController,
+              currentFilter: _currentFilter,
+              onFilterApplied: _handleFilterApplied,
             ),
           ),
           const SizedBox(height: 16),
-          // ✅ ИСПРАВЛЕНО: Правильная структура FutureBuilder
-          Expanded(
-            child: FutureBuilder<List<Book>>(
-              future: _booksFuture,
-              builder: (context, snapshot) {
-                // 1. Состояние загрузки
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: SpinKitFadingCircle(
-                      color: secondaryColor,
-                      size: 50.0,
-                    ),
-                  );
-                }
-
-                // 2. Состояние ошибки
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      'Ошибка при загрузке книг: ${snapshot.error}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  );
-                }
-
-                // 3. Отображение контента (или сообщения об отсутствии данных)
-                if (snapshot.hasData) {
-                  return _buildContent(snapshot.data!);
-                }
-
-                return const SizedBox.shrink();
-              },
-            ),
-          ),
+          Expanded(child: _buildContent()),
         ],
       ),
     );

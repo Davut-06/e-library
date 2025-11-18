@@ -20,7 +20,7 @@ class _BookListState extends State<BookList> {
   @override
   void initState() {
     super.initState();
-    _booksFuture = ApiService().fetchBooks();
+    _booksFuture = ApiService().fetchAllBooks();
   }
 
   @override

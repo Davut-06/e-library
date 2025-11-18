@@ -1,21 +1,31 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
+// ! Убедитесь, что эти импорты верны в вашем проекте
 import '../models/book_models.dart';
+import '../models/book_filter_model.dart';
 import 'package:path_provider/path_provider.dart';
 
 class ApiService {
+  // Базовая URL, которую вы предоставили
   static const String _baseUrl = 'http://192.168.100.202/api';
-  //  'http:217.174.233.210:20001/api'; 'http://192.168.100.202/api';
   static const String _booksEndpoint = '/books/';
-  // Используется для формирования URL скачивания: /api/books/{bookId}/pdf
   static const String _pdfDownloadEndpoint = '/books/';
 
   final Dio _dio = Dio();
 
-  Future<List<Book>> fetchAllBooks() async {
+  /// 🌐 Метод для получения всех книг с учетом пагинации и фильтра.
+  ///
+  /// @param initialQueryParams: Карта параметров фильтра, полученная из BookFilterModel.
+  Future<List<Book>> fetchAllBooks({
+    Map<String, dynamic>? initialQueryParams,
+  }) async {
     List<Book> allBooks = [];
-    String? nextUrl = '$_baseUrl$_booksEndpoint'; // Начинаем с первой страницы
+
+    // 1. Формируем URL для первого запроса, включая параметры фильтра.
+    String? nextUrl = Uri.parse(
+      '$_baseUrl$_booksEndpoint',
+    ).replace(queryParameters: initialQueryParams).toString();
 
     try {
       // Цикл продолжается, пока есть URL для следующей страницы
@@ -28,13 +38,12 @@ class ApiService {
           final Map<String, dynamic> jsonResponse = response.data;
           final responseModel = BookListResponse.fromJson(jsonResponse);
 
-          // 1. Добавляем полученные книги в общий список
+          // Добавляем полученные книги в общий список
           allBooks.addAll(responseModel.results);
 
-          // 2. Обновляем nextUrl для следующей итерации
+          // Обновляем nextUrl для следующей итерации (может быть null)
           nextUrl = responseModel.next;
         } else {
-          // Обработка ошибки
           throw Exception(
             'Error loading page from server: ${response.statusCode}',
           );
@@ -48,27 +57,10 @@ class ApiService {
     return allBooks;
   }
 
-  // 1. Метод для получения списка книг (ваш существующий код)
-  Future<List<Book>> fetchBooks() async {
-    final String url = '$_baseUrl$_booksEndpoint';
-    // ... (логика fetchBooks опущена для краткости) ...
-    try {
-      final Response response = await _dio.get(url);
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> jsonResponse = response.data;
-        final responseModel = BookListResponse.fromJson(jsonResponse);
-        return responseModel.results;
-      } else {
-        throw Exception(
-          'Error loading books from server: ${response.statusCode}',
-        );
-      }
-    } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
-    }
-  }
+  // ! ВНИМАНИЕ: Ваш предыдущий метод fetchBooks() удален,
+  // ! так как fetchAllBooks() теперь полностью поддерживает и пагинацию, и фильтр.
 
-  // 2. Метод для скачивания PDF (Новый, добавленный)
+  /// ⬇️ Метод для скачивания PDF
   Future<File> downloadPdfFile(String bookId) async {
     // Формируем URL для скачивания
     final String apiUrl = '$_baseUrl$_pdfDownloadEndpoint$bookId/pdf';

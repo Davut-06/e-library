@@ -1,3 +1,4 @@
+//import 'package:e_library/models/book_filter_model.dart';
 import 'package:e_library/design/colors.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -7,6 +8,7 @@ import 'book_list.dart'; // Предполагаемый импорт для о�
 import 'search_bar.dart'; // Предполагаемый импорт для строки поиска
 import '../../services/api_services.dart';
 import '../../models/book_models.dart';
+import '../../models/book_filter_model.dart';
 import '../BookDetailScreen.dart';
 // import 'package:e_library/screens/library/filter_screen.dart'; // Если не используется, можно удалить
 
@@ -26,6 +28,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   bool _isSearching = false;
 
   Timer? _debounce;
+
+  BookFilterModel _currentFilter = BookFilterModel();
 
   final popularTitle = 'Popular';
   final newTitle = 'New';
@@ -87,6 +91,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
           }).toList();
         }
       });
+    });
+  }
+
+  void _handleFilterApplied(BookFilterModel newFilter) {
+    setState(() {
+      _currentFilter = newFilter;
+      _isSearching = false;
+      _filteredBooks = _allBooks;
     });
   }
 
@@ -172,7 +184,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
             const SizedBox(height: 10),
 
             // 1. Search bar + filter button (Передаем функцию поиска)
-            LibrarySearchBar(onSearch: _filterBooks),
+            LibrarySearchBar(
+              onSearch: _filterBooks,
+              currentFilter: _currentFilter,
+              onFilterApplied: _handleFilterApplied,
+            ),
 
             const SizedBox(height: 20),
 
