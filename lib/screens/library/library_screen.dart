@@ -65,7 +65,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     // Запускаем поиск через 300 мс после последнего ввода
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      final filter = BookFilterModel(search: query.trim());
+      // [ИСПРАВЛЕНИЕ: Добавляем .toLowerCase() для поиска без учета регистра]
+      final String searchString = query.trim().toLowerCase();
+      final filter = BookFilterModel(search: searchString);
 
       setState(() {
         _isSearching = true;
@@ -307,14 +309,14 @@ class BookSearchResultsList extends StatelessWidget {
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             leading: SizedBox(
-              width: 50,
-              height: 70,
+              width: 70,
+              height: 100,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4.0),
                 child: (book.thumbnailUrl.isNotEmpty)
                     ? Image.network(
                         book.thumbnailUrl,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
                         loadingBuilder: (context, child, loadingProgress) {
                           if (loadingProgress == null) return child;
                           return Center(

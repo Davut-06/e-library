@@ -74,7 +74,7 @@ class _LibrarySearchBarState extends State<LibrarySearchBar> {
                   ? IconButton(
                       icon: const Icon(Icons.clear, color: Colors.grey),
                       onPressed: () {
-                        // ! ИСПРАВЛЕНО: ТОЛЬКО ОЧИЩЕНИЕ
+                        // ! ОЧИЩЕНИЕ
                         _searchController.clear();
                         widget.onSearch(
                           '',
@@ -107,7 +107,7 @@ class _LibrarySearchBarState extends State<LibrarySearchBar> {
         const SizedBox(width: 12),
         IconButton(
           onPressed: () async {
-            // ! ИСПРАВЛЕНО: Ждем результат BookFilterModel из FilterScreen
+            // ! ЛОГИКА ОТКРЫТИЯ ФИЛЬТРА И ОБРАБОТКА РЕЗУЛЬТАТА
             final BookFilterModel? newFilter =
                 await Navigator.push<BookFilterModel>(
                   context,

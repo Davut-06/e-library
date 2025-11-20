@@ -23,12 +23,12 @@ class BookCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(3),
             child: Image.network(
               book.thumbnailUrl,
-              height: 150,
+              height: 180,
               width: double.infinity,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
 
               loadingBuilder: (context, child, loadingProgress) {
                 if (loadingProgress == null) return child;

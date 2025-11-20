@@ -6,18 +6,17 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'dart:async';
 import 'search_bar.dart';
 import '../../models/book_filter_model.dart';
-// Обязательный импорт
 import '../../widgets/book_card.dart';
 import 'filter_screen.dart';
 
 class SectionBooksScreen extends StatefulWidget {
   final String sectionTitle;
-  final BookFilterModel initialFilter; // Фильтр, переданный с LibraryScreen
+  final BookFilterModel initialFilter;
 
   const SectionBooksScreen({
     super.key,
     required this.sectionTitle,
-    required this.initialFilter, // Сделали final
+    required this.initialFilter,
   });
 
   @override
@@ -26,19 +25,23 @@ class SectionBooksScreen extends StatefulWidget {
 
 class _SectionBooksScreenState extends State<SectionBooksScreen> {
   final ApiService _apiService = ApiService();
-  final ScrollController _scrollController = ScrollController();
+
+  // ⚠️ КОНТРОЛЛЕР СКОММЕНТИРОВАН ДЛЯ РАБОТЫ С WEB (NotificationListener)
+  // final ScrollController _scrollController = ScrollController();
+
   final TextEditingController _searchController = TextEditingController();
 
   // --- ПОСТРАНИЧНАЯ ЗАГРУЗКА ---
-  List<Book> _allLoadedBooks = []; // Все книги, загруженные с API
-  List<Book> _displayBooks =
-      []; // Книги для отображения (после локального поиска)
+  List<Book> _allLoadedBooks = [];
+  List<Book> _displayBooks = [];
   BookFilterModel _currentFilter = BookFilterModel();
 
   int _currentPageOffset = 0;
-  final int _pageSize = 20;
+
+  final int _pageSize = 100;
+
   bool _isLoading = false;
-  bool _hasMore = true; // Есть ли еще страницы для загрузки
+  bool _hasMore = true;
   bool _isLocallySearching = false;
 
   Timer? _debounce;
@@ -46,39 +49,58 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
   @override
   void initState() {
     super.initState();
-    // ! 1. Инициализируем фильтр, переданный из LibraryScreen (например, search=CategoryName)
     _currentFilter = widget.initialFilter;
 
-    _loadNextPage(); // Запускаем первую загрузку
-    _scrollController.addListener(_onScroll);
+    _loadNextPage();
     _searchController.addListener(_onSearchChanged);
+
+    // ⚠️ ЛОГИКА SCROLL КОНТРОЛЛЕРА СКОММЕНТИРОВАНА
+    // _scrollController.addListener(_onScroll);
   }
 
-  // --- ЛОГИКА SCROLL И ЗАГРУЗКИ ---
-
+  // --- ЛОГИКА SCROLL ДЛЯ ANDROID (СКОММЕНТИРОВАНО) ---
+  /*
   void _onScroll() {
     // Если достигнут конец списка (с небольшим запасом)
     if (_scrollController.position.pixels >=
             _scrollController.position.maxScrollExtent * 0.9 &&
         !_isLoading &&
         _hasMore &&
-        !_isLocallySearching // Не грузим, пока ищем локально
-        ) {
+        !_isLocallySearching) {
       _loadNextPage();
     }
   }
+  */
 
-  // ! 2. МЕТОД ПОСТРАНИЧНОЙ ЗАГРУЗКИ (Заменяет _loadBooks)
+  // --- ЛОГИКА SCROLL ДЛЯ WEB (NotificationListener) ---
+  bool _onNotification(ScrollNotification scrollInfo) {
+    // Проверяем, достигнут ли конец прокрутки (90% от maxExtent)
+    if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent * 0.9 &&
+        !_isLoading &&
+        _hasMore &&
+        !_isLocallySearching) {
+      _loadNextPage();
+      return true; // Указываем, что нотификация обработана
+    }
+    return false;
+  }
+
+  // ! МЕТОД ПОСТРАНИЧНОЙ ЗАГРУЗКИ
   Future<void> _loadNextPage({BookFilterModel? newFilter}) async {
     if (_isLoading) return;
 
     if (newFilter != null) {
-      // Если применили новый фильтр, сбрасываем все
       _currentFilter = newFilter;
       _allLoadedBooks = [];
       _currentPageOffset = 0;
       _hasMore = true;
-      _scrollController.jumpTo(0);
+      _searchController.clear();
+      _isLocallySearching = false;
+
+      // ⚠️ СБРОС СКРОЛЛА: используем проверку, так как контроллер теперь опционален
+      // if (_scrollController.hasClients) {
+      //   _scrollController.jumpTo(0);
+      // }
     }
 
     if (!_hasMore) return;
@@ -88,27 +110,26 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
     });
 
     try {
-      // ! 3. Используем _currentFilter для параметров запроса API
       final Map<String, dynamic> params = _currentFilter.toQueryParams();
 
-      final BookListResponse response = await _apiService.fetchBooksPage(
+      final response = await _apiService.fetchBooksPage(
         initialQueryParams: params,
         limit: _pageSize,
         offset: _currentPageOffset,
       );
 
       setState(() {
-        _allLoadedBooks.addAll(response.results);
-        _hasMore =
-            response.results.length ==
-            _pageSize; // Если пришло меньше чем pageSize, значит это последняя страница
+        _allLoadedBooks.addAll(response.results as List<Book>);
+
+        _hasMore = response.results.length == _pageSize;
+
         _currentPageOffset += _pageSize;
         _isLoading = false;
-        // После загрузки применяем локальный поиск (если он был активен)
+
         _applyLocalSearch(_searchController.text);
       });
     } catch (e) {
-      print('Ошибка загрузки страницы: $e');
+      debugPrint('Ошибка загрузки страницы: $e');
       setState(() {
         _isLoading = false;
       });
@@ -128,7 +149,6 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
     });
   }
 
-  // ! Метод для LibrarySearchBar (обязателен, но просто вызывает _onSearchChanged)
   void _handleSearchQuery(String query) {
     _onSearchChanged();
   }
@@ -165,9 +185,7 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
     }
   }
 
-  // 4. Метод для обработки результата из FilterScreen
   void _handleFilterApplied(BookFilterModel newFilter) {
-    // ! Запускаем загрузку с новым фильтром и сбросом страниц
     _loadNextPage(newFilter: newFilter);
   }
 
@@ -176,7 +194,10 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
     _debounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
-    _scrollController.dispose();
+
+    // ⚠️ DISPOSE КОНТРОЛЛЕРА СКОММЕНТИРОВАНО
+    // _scrollController.dispose();
+
     super.dispose();
   }
 
@@ -184,32 +205,32 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
 
   Widget _buildContent() {
     if (_allLoadedBooks.isEmpty && _isLoading) {
-      // Отображаем SpinKit только при первой загрузке
-      return const Center(
-        child: SpinKitFadingCircle(color: secondaryColor, size: 50.0),
+      return Center(
+        child: SpinKitFadingCircle(color: primaryColor, size: 50.0),
       );
     }
 
     if (_displayBooks.isEmpty && !_isLoading) {
-      final isSearchActive = _searchController.text.isNotEmpty;
-      final message = isSearchActive
+      final message = _isLocallySearching
           ? 'По вашему запросу ничего не найдено.'
           : 'Книги в этом разделе не найдены.';
-      return Center(child: Text(message));
+      return Center(
+        child: Text(message, style: TextStyle(color: secondaryColor)),
+      );
     }
 
     // Отображение списка книг
     return GridView.builder(
-      controller: _scrollController,
+      // ⚠️ КОНТРОЛЛЕР СКОММЕНТИРОВАН
+      // controller: _scrollController,
+      primary: false,
+
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0),
       itemCount:
-          _displayBooks.length +
-          (_hasMore && !_isLocallySearching
-              ? 1
-              : 0), // Добавляем место для лоадера
+          _displayBooks.length + (_hasMore && !_isLocallySearching ? 1 : 0),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, // Обычно 3, а не 4 для комфортного просмотра
-        childAspectRatio: 0.5, // Изменен для 3х-колоночной сетки
+        crossAxisCount: 3,
+        childAspectRatio: 0.5,
         crossAxisSpacing: 16.0,
         mainAxisSpacing: 16.0,
       ),
@@ -223,7 +244,9 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
             ),
           );
         }
-        return BookCard(book: _displayBooks[index]);
+
+        final book = _displayBooks[index];
+        return BookCard(book: book);
       },
     );
   }
@@ -246,20 +269,24 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
           },
         ),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: LibrarySearchBar(
-              onSearch: _handleSearchQuery,
-              controller: _searchController,
-              currentFilter: _currentFilter,
-              onFilterApplied: _handleFilterApplied,
+      // !!! ИСПОЛЬЗУЕМ NotificationListener ДЛЯ ОБРАБОТКИ SCROLL В WEB !!!
+      body: NotificationListener<ScrollNotification>(
+        onNotification: _onNotification,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: LibrarySearchBar(
+                onSearch: _handleSearchQuery,
+                controller: _searchController,
+                currentFilter: _currentFilter,
+                onFilterApplied: _handleFilterApplied,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Expanded(child: _buildContent()),
-        ],
+            const SizedBox(height: 16),
+            Expanded(child: _buildContent()),
+          ],
+        ),
       ),
     );
   }

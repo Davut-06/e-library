@@ -1,20 +1,50 @@
 import 'package:e_library/design/colors.dart';
 import 'package:e_library/models/book_models.dart';
+import 'package:e_library/services/api_services.dart';
 import 'package:flutter/material.dart';
 import '../screens/pdf_reader_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../models/book_filter_model.dart';
+import '../screens/library/section_books_screen.dart'; // Убедитесь, что этот импорт правильный
 
 class BookDetailScreen extends StatelessWidget {
   final Book book;
+  final ApiService _apiService = ApiService();
 
-  const BookDetailScreen({super.key, required this.book});
+  BookDetailScreen({super.key, required this.book});
 
+  // ********************************************
+  // * МЕТОД: Открытие PDF или внешнего URL
+  // ********************************************
+  void _launchFile(BuildContext context) async {
+    if (book.fileUrl != null && book.fileUrl!.isNotEmpty) {
+      final uri = Uri.parse(book.fileUrl!);
+
+      // Предполагаем, что для PDF мы хотим использовать внутренний ридер,
+      // но пока используем `url_launcher` для простоты.
+      // Если это PDF, лучше использовать:
+      // Navigator.push(context, MaterialPageRoute(builder: (context) => PdfReaderScreen(url: book.fileUrl!)));
+
+      if (await canLaunchUrl(uri)) {
+        // [ИСПРАВЛЕНИЕ: Используем `LaunchMode.externalApplication` для открытия внешних ссылок]
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось открыть ссылку: ${book.fileUrl}')),
+        );
+      }
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Файл для чтения онлайн недоступен.')),
+      );
+    }
+  }
+
+  // ********************************************
+  // * МЕТОД: Построение основного экрана
+  // ********************************************
   @override
   Widget build(BuildContext context) {
-    // Временное описание
-    const String dummyDescription =
-        "Cras eget elit semper, congue sapien id, pellentesque diam. Nulla faucibus diam nec fermentum ullamcorper. Praesent sed ipsum ut augue vestibulum malesuada. Duis vitae volutpat odio. Integer sit amet elit ac justo sagittis dignissim. Vivamus quis metus in nunc semper efficitur eget vitae diam. Proin justo diam, venenatis sit amet eros in, iaculis auctor magna. Pellentesque sit amet accumsan urna, sit amet pretium ipsum. Fusce condimentum venenatis mauris et luctus. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae";
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -50,11 +80,11 @@ class BookDetailScreen extends StatelessWidget {
 
             const SizedBox(height: 30),
 
-            _buildRecommendationsHeader(),
+            _buildRecommendationsTitle(context), // Передаем context
 
             const SizedBox(height: 15),
 
-            _buildRecommendationsList(),
+            _buildRecommendationsListWidget(context), // Передаем context
 
             const SizedBox(height: 20),
           ],
@@ -76,9 +106,9 @@ class BookDetailScreen extends StatelessWidget {
           ),
           child: Image.network(
             book.thumbnailUrl,
-            height: 150,
+            height: 220,
             width: double.infinity,
-            fit: BoxFit.cover,
+            fit: BoxFit.contain,
           ),
         ),
 
@@ -88,14 +118,11 @@ class BookDetailScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Название книги
               Text(
                 book.title,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 12),
 
@@ -111,12 +138,20 @@ class BookDetailScreen extends StatelessWidget {
 
               const SizedBox(height: 15),
 
-              // Кнопки
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        // TODO: Добавить логику загрузки (заглушка)
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Начало загрузки... (логика не реализована)',
+                            ),
+                          ),
+                        );
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: activeColor,
                         foregroundColor: Colors.white,
@@ -139,31 +174,8 @@ class BookDetailScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        // Проверяем, существует ли URL файла
-                        if (book.fileUrl != null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => PdfReaderScreen(
-                                // Передаем URL PDF-файла в экран читалки
-                                pdfUrl: book.fileUrl!,
-                                bookTitle: book.title,
-                              ),
-                            ),
-                          );
-                          launchUrl(Uri.parse(book.fileUrl!));
-                        } else {
-                          // Если файла нет, можно вывести сообщение или диалог
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Файл для чтения онлайн недоступен.',
-                              ),
-                            ),
-                          );
-                        }
-                      },
+                      // [ИСПРАВЛЕНИЕ: Вызываем общий метод _launchFile]
+                      onPressed: () => _launchFile(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: activeColor,
                         foregroundColor: Colors.white,
@@ -192,7 +204,6 @@ class BookDetailScreen extends StatelessWidget {
     );
   }
 
-  // Строка метаданных "Ключ: Значение"
   Widget _buildMetadataRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4.0),
@@ -202,9 +213,7 @@ class BookDetailScreen extends StatelessWidget {
           children: <TextSpan>[
             TextSpan(
               text: '$label: ',
-              style: const TextStyle(
-                color: secondaryColor,
-              ), // Ключ синим цветом
+              style: const TextStyle(color: secondaryColor),
             ),
             TextSpan(text: value),
           ],
@@ -213,8 +222,16 @@ class BookDetailScreen extends StatelessWidget {
     );
   }
 
-  // Заголовок рекомендаций
-  Widget _buildRecommendationsHeader() {
+  // ********************************************
+  // * МЕТОД: Заголовок рекомендаций ("See all")
+  // ********************************************
+  Widget _buildRecommendationsTitle(BuildContext context) {
+    // Формируем фильтр, чтобы исключить текущую книгу при просмотре "всех" рекомендаций
+    final filter = BookFilterModel(
+      categoryId: book.category.id,
+      excludeId: book.id,
+    );
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -227,49 +244,124 @@ class BookDetailScreen extends StatelessWidget {
           ),
         ),
         TextButton(
-          onPressed: () {},
+          onPressed: () {
+            // [ИСПРАВЛЕНИЕ: Логика для "See all"]
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => SectionBooksScreen(
+                  sectionTitle: 'Recommendations: ${book.category.name}',
+                  initialFilter: filter,
+                ),
+              ),
+            );
+          },
           child: const Text('See all', style: TextStyle(color: primaryColor)),
         ),
       ],
     );
   }
 
-  //recommendations
-
-  Widget _buildRecommendationsList() {
+  // ********************************************
+  // * МЕТОД: Список рекомендаций (горизонтальный)
+  // ********************************************
+  Widget _buildRecommendationsListWidget(BuildContext context) {
+    final filter = BookFilterModel(
+      categoryId: book.category.id,
+      excludeId: book.id,
+    );
     return SizedBox(
-      height: 150,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: 8,
-        itemBuilder: (context, index) {
-          return Container(
-            width: 100,
-            margin: const EdgeInsets.only(right: 15.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
+      height: 200,
+      child: FutureBuilder<dynamic>(
+        future: _apiService.fetchBooksPage(
+          initialQueryParams: filter.toQueryParams(),
+          limit: 10, // Ограничиваем количество для горизонтального списка
+        ),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final List<Book> allFetchedBooks = snapshot.data?.results ?? [];
+          final List<Book> recommendedBooks = allFetchedBooks
+              .where((b) => b.id != book.id)
+              .toList();
+
+          if (snapshot.hasError || recommendedBooks.isEmpty) {
+            return const Center(
+              child: Text(
+                'Нет рекомендаций в этой категории.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            );
+          }
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: recommendedBooks.length,
+            itemBuilder: (context, index) {
+              final recommendedBook = recommendedBooks[index];
+              return InkWell(
+                onTap: () {
+                  // [ИСПРАВЛЕНИЕ: Переход на страницу деталей рекомендуемой книги]
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      // Заменяем текущий экран новым, чтобы стек навигации был чистым
+                      builder: (context) =>
+                          BookDetailScreen(book: recommendedBook),
+                    ),
+                  );
+                },
+                child: Container(
                   width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(4),
+                  margin: const EdgeInsets.only(right: 15.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 100,
+                        height: 150,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: Image.network(
+                            recommendedBook.thumbnailUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[200],
+                                child: const Icon(
+                                  Icons.book,
+                                  size: 40,
+                                  color: Colors.grey,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        recommendedBook.title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        recommendedBook.author.name,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: secondaryColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 5),
-                const Text(
-                  'The book of art',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const Text(
-                  'Author Name',
-                  style: TextStyle(fontSize: 12, color: secondaryColor),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
