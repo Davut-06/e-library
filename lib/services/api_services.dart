@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 // ! Убедитесь, что эти импорты верны в вашем проекте
@@ -8,12 +7,25 @@ import 'package:path_provider/path_provider.dart';
 
 class ApiService {
   // Базовая URL, которую вы предоставили
-  static const String _baseUrl = 'http://192.168.100.202/api';
+  static const String _baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://192.168.100.202/api',
+  );
   static const String _booksEndpoint = '/books/';
   static const String _pdfDownloadEndpoint = '/books/';
   static const String _categoriesEndpoint = '/books/categories/';
 
-  final Dio _dio = Dio();
+  final Dio _dio;
+
+  ApiService({Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 10),
+            ),
+          );
 
   /// 🌐 Метод для получения всех книг с учетом пагинации и фильтра.
   ///

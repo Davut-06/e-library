@@ -17,25 +17,34 @@ class BookDetailScreen extends StatelessWidget {
   // * МЕТОД: Открытие PDF или внешнего URL
   // ********************************************
   void _launchFile(BuildContext context) async {
-    if (book.fileUrl != null && book.fileUrl!.isNotEmpty) {
-      final uri = Uri.parse(book.fileUrl!);
-
-      // Предполагаем, что для PDF мы хотим использовать внутренний ридер,
-      // но пока используем `url_launcher` для простоты.
-      // Если это PDF, лучше использовать:
-      // Navigator.push(context, MaterialPageRoute(builder: (context) => PdfReaderScreen(url: book.fileUrl!)));
-
-      if (await canLaunchUrl(uri)) {
-        // [ИСПРАВЛЕНИЕ: Используем `LaunchMode.externalApplication` для открытия внешних ссылок]
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось открыть ссылку: ${book.fileUrl}')),
-        );
-      }
-    } else if (context.mounted) {
+    final String? url = book.fileUrl?.trim();
+    if (url == null || url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Файл для чтения онлайн недоступен.')),
+      );
+      return;
+    }
+
+    final bool isPdf = url.toLowerCase().endsWith('.pdf');
+    if (isPdf) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PdfReaderScreen(
+            pdfUrl: url,
+            bookTitle: book.title,
+          ),
+        ),
+      );
+      return;
+    }
+
+    final Uri? uri = Uri.tryParse(url);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось открыть ссылку: $url')),
       );
     }
   }

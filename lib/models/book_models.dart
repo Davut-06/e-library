@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 // Модель для автора книги
 class Author {
   final String name;
@@ -7,7 +5,17 @@ class Author {
   Author({required this.name});
 
   factory Author.fromJson(Map<String, dynamic> json) {
-    return Author(name: json['name'] as String);
+    return Author(name: _asString(json['name'], fallback: 'Неизвестный автор'));
+  }
+
+  factory Author.fromDynamic(dynamic raw) {
+    if (raw is Map<String, dynamic>) {
+      return Author.fromJson(raw);
+    }
+    if (raw is String) {
+      return Author(name: raw);
+    }
+    return Author(name: 'Неизвестный автор');
   }
 }
 
@@ -21,9 +29,9 @@ class BookCategory {
 
   factory BookCategory.fromJson(Map<String, dynamic> json) {
     return BookCategory(
-      id: json['id'] as int,
-      name: json['name'] as String,
-      slug: json['slug'] as String,
+      id: _parseInt(json['id']),
+      name: _asString(json['name'], fallback: 'Неизвестно'),
+      slug: _asString(json['slug'], fallback: 'unknown'),
     );
   }
 }
@@ -61,11 +69,10 @@ class Book {
     final categoryJson = json['category'];
     BookCategory parsedCategory;
 
-    if (categoryJson is int) {
+    if (categoryJson is int || categoryJson is String) {
       // Если API возвращает только ID категории
-      // ! ИСПРАВЛЕНИЕ: Добавляем slug для соответствия конструктору
       parsedCategory = BookCategory(
-        id: categoryJson,
+        id: _parseInt(categoryJson),
         name: 'Неизвестно',
         slug: 'unknown',
       );
@@ -74,22 +81,23 @@ class Book {
       parsedCategory = BookCategory.fromJson(categoryJson);
     } else {
       // Fallback
-      // ! ИСПРАВЛЕНИЕ: Добавляем slug для соответствия конструктору
       parsedCategory = BookCategory(id: 0, name: 'Неизвестно', slug: 'unknown');
     }
 
     return Book(
-      id: json['id'] as int,
-      title: json['name'] as String,
-      slug: json['slug'] as String,
-      thumbnailUrl: json['thumbnail'] as String,
-      description: json['description'] ?? 'Нет описания',
-      author: Author.fromJson(json['author']),
+      id: _parseInt(json['id']),
+      title: _asString(json['name'], fallback: 'Без названия'),
+      slug: _asString(json['slug'], fallback: ''),
+      thumbnailUrl: _asString(json['thumbnail']),
+      description: _asString(json['description'], fallback: 'Нет описания'),
+      author: Author.fromDynamic(json['author']),
       category: parsedCategory, // Используем адаптированный объект
-      year: json['year'] as int,
-      language: json['language'] as int,
-      viewCount: json['view_count'] as int,
-      fileUrl: json['file'] as String?,
+      year: _parseInt(json['year']),
+      language: _parseInt(json['language']),
+      viewCount: _parseInt(json['view_count']),
+      fileUrl: _asString(json['file'], fallback: '').isEmpty
+          ? null
+          : _asString(json['file']),
     );
   }
 }
@@ -109,16 +117,30 @@ class BookListResponse {
   });
 
   factory BookListResponse.fromJson(Map<String, dynamic> json) {
-    final List<dynamic> resultsList = json['results'] ?? [];
+    final resultsRaw = json['results'];
+    final List<dynamic> resultsList = resultsRaw is List ? resultsRaw : const [];
     final List<Book> books = resultsList
-        .map((item) => Book.fromJson(item as Map<String, dynamic>))
+        .whereType<Map<String, dynamic>>()
+        .map((item) => Book.fromJson(item))
         .toList();
 
     return BookListResponse(
-      count: json['count'] as int,
+      count: _parseInt(json['count']),
       next: json['next'] as String?,
       previous: json['previous'] as String?,
       results: books,
     );
   }
+}
+
+int _parseInt(dynamic value, {int fallback = 0}) {
+  if (value is int) return value;
+  if (value is String) return int.tryParse(value) ?? fallback;
+  return fallback;
+}
+
+String _asString(dynamic value, {String fallback = ''}) {
+  if (value is String) return value;
+  if (value != null) return value.toString();
+  return fallback;
 }
