@@ -22,10 +22,13 @@ class ApiService {
           dio ??
           Dio(
             BaseOptions(
-              connectTimeout: const Duration(seconds: 5),
-              receiveTimeout: const Duration(seconds: 10),
+              baseUrl: _baseUrl,
+              connectTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 15),
             ),
           );
+
+  Dio get dio => _dio;
 
   /// 🌐 Метод для получения всех книг с учетом пагинации и фильтра.
   ///

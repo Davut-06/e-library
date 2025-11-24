@@ -312,7 +312,7 @@ class BookSearchResultsList extends StatelessWidget {
               width: 70,
               height: 100,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(4.0),
+                borderRadius: BorderRadius.circular(2),
                 child: (book.thumbnailUrl.isNotEmpty)
                     ? Image.network(
                         book.thumbnailUrl,

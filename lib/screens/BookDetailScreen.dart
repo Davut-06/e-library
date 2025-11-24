@@ -5,100 +5,236 @@ import 'package:flutter/material.dart';
 import '../screens/pdf_reader_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/book_filter_model.dart';
-import '../screens/library/section_books_screen.dart'; // Убедитесь, что этот импорт правильный
+import '../screens/library/section_books_screen.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 
-class BookDetailScreen extends StatelessWidget {
+class BookDetailScreen extends StatefulWidget {
   final Book book;
-  final ApiService _apiService = ApiService();
+  final ApiService _apiService;
 
-  BookDetailScreen({super.key, required this.book});
+  BookDetailScreen({super.key, required this.book})
+    : _apiService = ApiService();
 
-  // ********************************************
-  // * МЕТОД: Открытие PDF или внешнего URL
-  // ********************************************
+  @override
+  State<BookDetailScreen> createState() => _BookDetailScreenState();
+}
+
+class _BookDetailScreenState extends State<BookDetailScreen> {
+  bool _isLoading = false;
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
+
   void _launchFile(BuildContext context) async {
-    final String? url = book.fileUrl?.trim();
+    final String? url = widget.book.fileUrl?.trim();
     if (url == null || url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Файл для чтения онлайн недоступен.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Файл для чтения онлайн недоступен.')),
+        );
+      }
       return;
     }
+    setState(() {
+      _isLoading = true;
+    });
 
     final bool isPdf = url.toLowerCase().endsWith('.pdf');
     if (isPdf) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PdfReaderScreen(
-            pdfUrl: url,
-            bookTitle: book.title,
+      if (mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                PdfReaderScreen(pdfUrl: url, bookTitle: widget.book.title),
           ),
-        ),
-      );
+        );
+      }
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
       return;
     }
 
     final Uri? uri = Uri.tryParse(url);
-    if (uri != null && await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось открыть ссылку: $url')),
-      );
+    // final bool canLaunch = await canLaunchUrl(uri!);
+    if (uri != null) {
+      await launchUrl(uri);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось открыть ссылку: $url')),
+        );
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  // ********************************************
-  // * МЕТОД: Построение основного экрана
-  // ********************************************
+  // import 'package:permission_handler/permission_handler.dart'; // Добавить импорт
+
+  void _downloadBook(BuildContext context) async {
+    final String? url = widget.book.fileUrl?.trim();
+    if (url == null || url.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Файл для скачивания недоступен.')),
+        );
+      }
+      return;
+    }
+
+    // Запрос разрешения на хранение (Критично для Android)
+    if (await Permission.storage.request().isDenied) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Разрешение на хранение не предоставлено.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      // ⚠️ ИСПОЛЬЗУЕМ getDownloadsDirectory()
+      final Directory? directory = await getDownloadsDirectory();
+
+      if (directory == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Не удалось найти каталог для загрузок.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      String fileName =
+          "${widget.book.title.replaceAll(' ', '_')}_${widget.book.id}.pdf";
+      // Устанавливаем путь в папку Downloads
+      String savePath = '${directory.path}/$fileName';
+
+      // Проверка существования файла
+      if (await File(savePath).exists()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Книга уже скачана: $savePath')),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _isDownloading = true;
+        _downloadProgress = 0.0;
+      });
+
+      // 3. Загрузка файла
+      await widget._apiService.dio.download(
+        url,
+        savePath, // <-- Теперь это папка Downloads
+        onReceiveProgress: (received, total) {
+          // ... (логика прогресса)
+        },
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Книга успешно скачана в папку "Загрузки"! (Путь: $savePath)',
+            ),
+          ),
+        );
+      }
+    } on DioException catch (e) {
+      // ... (Обработка ошибок)
+    } catch (e) {
+      // ... (Обработка ошибок)
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _downloadProgress = 0.0;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        toolbarHeight: 60,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new),
-          color: iconColor,
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _buildHeaderSection(context, book),
-
-            const SizedBox(height: 20),
-            Text(
-              book.description,
-              style: TextStyle(
-                fontSize: 15,
-                height: 1.5,
-                color: secondaryColor,
-              ),
-              textAlign: TextAlign.justify,
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            toolbarHeight: 60,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new),
+              color: iconColor,
+              onPressed: () {
+                Navigator.pop(context);
+              },
             ),
-
-            const SizedBox(height: 30),
-
-            _buildRecommendationsTitle(context), // Передаем context
-
-            const SizedBox(height: 15),
-
-            _buildRecommendationsListWidget(context), // Передаем context
-
-            const SizedBox(height: 20),
-          ],
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _buildHeaderSection(context, widget.book),
+                const SizedBox(height: 20),
+                Text(
+                  widget.book.description,
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.5,
+                    color: secondaryColor,
+                  ),
+                  textAlign: TextAlign.justify,
+                ),
+                const SizedBox(height: 30),
+                _buildRecommendationsTitle(context),
+                const SizedBox(height: 15),
+                _buildRecommendationsListWidget(context),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
         ),
-      ),
+        if (_isLoading)
+          const Opacity(
+            opacity: 0.6,
+            child: ModalBarrier(dismissible: false, color: Colors.black),
+          ),
+        if (_isLoading)
+          const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: activeColor),
+                SizedBox(height: 16),
+                Text(
+                  'Ожидайте, идет загрузка книги...',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -109,20 +245,18 @@ class BookDetailScreen extends StatelessWidget {
         Container(
           width: 120,
           height: 187,
-          decoration: BoxDecoration(
-            color: Colors.grey[200],
+          decoration: BoxDecoration(color: Colors.grey[200]),
+          child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-          ),
-          child: Image.network(
-            book.thumbnailUrl,
-            height: 220,
-            width: double.infinity,
-            fit: BoxFit.contain,
+            child: Image.network(
+              book.thumbnailUrl,
+              height: 220,
+              width: double.infinity,
+              fit: BoxFit.contain,
+            ),
           ),
         ),
-
         const SizedBox(width: 16),
-
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -134,33 +268,20 @@ class BookDetailScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-
               _buildMetadataRow('Author', book.author.name),
-
               _buildMetadataRow('Category', book.category.name),
-
               _buildMetadataRow('Year', book.year.toString()),
-
-              _buildMetadataRow('Language ID', book.language.toString()),
-
-              _buildMetadataRow('View Count', book.viewCount.toString()),
-
+              // Исправлено: Language ID на LanguageID для соответствия предыдущей реализации
+              _buildMetadataRow('LanguageID', book.language.toString()),
+              _buildMetadataRow('ViewCount', book.viewCount.toString()),
               const SizedBox(height: 15),
-
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: Добавить логику загрузки (заглушка)
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Начало загрузки... (логика не реализована)',
-                            ),
-                          ),
-                        );
-                      },
+                      onPressed: _isDownloading
+                          ? null
+                          : () => _downloadBook(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: activeColor,
                         foregroundColor: Colors.white,
@@ -170,20 +291,33 @@ class BookDetailScreen extends StatelessWidget {
                         ),
                         elevation: 0,
                       ),
-                      child: const Text(
-                        'Download',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: backgroundColor,
-                        ),
-                      ),
+                      child: _isDownloading
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                value: _downloadProgress > 0.0
+                                    ? _downloadProgress
+                                    : null,
+                                strokeWidth: 3,
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  backgroundColor,
+                                ),
+                              ),
+                            )
+                          : const Text(
+                              'Download',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: backgroundColor,
+                              ),
+                            ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton(
-                      // [ИСПРАВЛЕНИЕ: Вызываем общий метод _launchFile]
                       onPressed: () => _launchFile(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: activeColor,
@@ -231,16 +365,11 @@ class BookDetailScreen extends StatelessWidget {
     );
   }
 
-  // ********************************************
-  // * МЕТОД: Заголовок рекомендаций ("See all")
-  // ********************************************
   Widget _buildRecommendationsTitle(BuildContext context) {
-    // Формируем фильтр, чтобы исключить текущую книгу при просмотре "всех" рекомендаций
     final filter = BookFilterModel(
-      categoryId: book.category.id,
-      excludeId: book.id,
+      categoryId: widget.book.category.id,
+      excludeId: widget.book.id,
     );
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -254,12 +383,11 @@ class BookDetailScreen extends StatelessWidget {
         ),
         TextButton(
           onPressed: () {
-            // [ИСПРАВЛЕНИЕ: Логика для "See all"]
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => SectionBooksScreen(
-                  sectionTitle: 'Recommendations: ${book.category.name}',
+                  sectionTitle: 'Recommendations: ${widget.book.category.name}',
                   initialFilter: filter,
                 ),
               ),
@@ -271,20 +399,17 @@ class BookDetailScreen extends StatelessWidget {
     );
   }
 
-  // ********************************************
-  // * МЕТОД: Список рекомендаций (горизонтальный)
-  // ********************************************
   Widget _buildRecommendationsListWidget(BuildContext context) {
     final filter = BookFilterModel(
-      categoryId: book.category.id,
-      excludeId: book.id,
+      categoryId: widget.book.category.id,
+      excludeId: widget.book.id,
     );
     return SizedBox(
-      height: 200,
+      height: 250,
       child: FutureBuilder<dynamic>(
-        future: _apiService.fetchBooksPage(
+        future: widget._apiService.fetchBooksPage(
           initialQueryParams: filter.toQueryParams(),
-          limit: 10, // Ограничиваем количество для горизонтального списка
+          limit: 10,
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -292,7 +417,7 @@ class BookDetailScreen extends StatelessWidget {
           }
           final List<Book> allFetchedBooks = snapshot.data?.results ?? [];
           final List<Book> recommendedBooks = allFetchedBooks
-              .where((b) => b.id != book.id)
+              .where((b) => b.id != widget.book.id)
               .toList();
 
           if (snapshot.hasError || recommendedBooks.isEmpty) {
@@ -305,16 +430,15 @@ class BookDetailScreen extends StatelessWidget {
           }
           return ListView.builder(
             scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 0.0),
             itemCount: recommendedBooks.length,
             itemBuilder: (context, index) {
               final recommendedBook = recommendedBooks[index];
               return InkWell(
                 onTap: () {
-                  // [ИСПРАВЛЕНИЕ: Переход на страницу деталей рекомендуемой книги]
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      // Заменяем текущий экран новым, чтобы стек навигации был чистым
                       builder: (context) =>
                           BookDetailScreen(book: recommendedBook),
                     ),
@@ -353,6 +477,7 @@ class BookDetailScreen extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
+                          color: secondaryVariantColor,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -361,7 +486,7 @@ class BookDetailScreen extends StatelessWidget {
                         recommendedBook.author.name,
                         style: const TextStyle(
                           fontSize: 12,
-                          color: secondaryColor,
+                          color: primaryColor,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
