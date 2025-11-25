@@ -1,81 +1,163 @@
-/// lib/models/book_filter_model.dart
-
 class BookFilterModel {
-  final List<String> genres;
-  final int? yearFrom;
-  final int? yearTo;
+  // --- ПОЛЯ (Не изменены) ---
+  final List<int> genreIds;
+  final int? authorId;
+  final int? subjectId;
+  final String? languageId;
   final String? type;
-  final String? authorName;
+  final int? yearStart;
+  final int? yearEnd;
   final String? search;
   final int? categoryId;
   final String? categorySlug;
-  final int? excludeId; // 💡 ID книги для исключения из списка
-  final int? page; // 💡 Номер страницы для пагинации
-  final int? limit; // 💡 НОВОЕ: Максимальное количество элементов на странице
+  final int? excludeId;
+  final int? page;
+  final int? limit;
+  final int? offset;
 
-  BookFilterModel({
-    this.genres = const [],
-    this.yearFrom,
-    this.yearTo,
+  const BookFilterModel({
+    this.genreIds = const [],
+    this.authorId,
+    this.subjectId,
+    this.languageId,
     this.type,
-    this.authorName,
+    this.yearStart,
+    this.yearEnd,
     this.search,
     this.categoryId,
     this.categorySlug,
     this.excludeId,
     this.page,
-    this.limit, // 💡 Добавляем в конструктор
+    this.limit,
+    this.offset,
   });
+
+  /// 🛠️ Создает копию модели с возможностью замены только нужных полей.
+  BookFilterModel copyWith({
+    List<int>? genreIds,
+    int? authorId,
+    int? subjectId,
+    String? languageId,
+    String? type,
+    int? yearStart,
+    int? yearEnd,
+    String? search,
+    int? categoryId,
+    String? categorySlug,
+    int? excludeId,
+    int? page,
+    int? limit,
+    int? offset,
+  }) {
+    return BookFilterModel(
+      genreIds: genreIds ?? this.genreIds,
+      authorId: authorId ?? this.authorId,
+      subjectId: subjectId ?? this.subjectId,
+      languageId: languageId ?? this.languageId,
+      type: type ?? this.type,
+      yearStart: yearStart ?? this.yearStart,
+      yearEnd: yearEnd ?? this.yearEnd,
+      search: search ?? this.search,
+      categoryId: categoryId ?? this.categoryId,
+      categorySlug: categorySlug ?? this.categorySlug,
+      excludeId: excludeId ?? this.excludeId,
+      page: page ?? this.page,
+      limit: limit ?? this.limit,
+      offset: offset ?? this.offset,
+    );
+  }
+
+  // ******************************************************
+  // ✅ ИСПРАВЛЕНИЕ: Добавлен именованный параметр 'ignoreSearch'
+  // ******************************************************
+  /// Проверяет, активен ли какой-либо фильтр, кроме пагинации.
+  /// Если [ignoreSearch] true, то поле 'search' игнорируется.
+  bool isFilterActive({bool ignoreSearch = false}) {
+    // Логика проверки всех фильтров, кроме пагинации
+    final bool otherFiltersActive =
+        genreIds.isNotEmpty ||
+        authorId != null ||
+        subjectId != null ||
+        languageId?.isNotEmpty == true ||
+        type?.isNotEmpty == true ||
+        yearStart != null ||
+        yearEnd != null ||
+        categoryId != null ||
+        categorySlug?.isNotEmpty == true;
+
+    if (ignoreSearch) {
+      return otherFiltersActive;
+    } else {
+      // Учитываем и текстовый поиск, и другие фильтры
+      return (search?.isNotEmpty == true) || otherFiltersActive;
+    }
+  }
 
   /// Преобразует модель фильтра в Map, готовый для передачи в Dio
   /// как queryParameters.
   Map<String, dynamic> toQueryParams() {
     final Map<String, dynamic> params = {};
+    if (offset != null) {
+      params['offset'] = offset.toString();
+    }
 
-    // --- 1. ПАГИНАЦИЯ И СМЕЩЕНИЕ ---
+    // --- 1. ПАГИНАЦИЯ ---
     if (page != null) {
-      params['page'] = page.toString();
+      params['page'] = page!.toString();
     }
     if (limit != null) {
-      // Это позволяет переопределить лимит по умолчанию (например, 20)
-      params['limit'] = limit.toString();
+      params['limit'] = limit!.toString();
     }
 
     // --- 2. ПОИСК И ИСКЛЮЧЕНИЯ ---
-    if (search != null && search!.isNotEmpty) {
+    if (search?.isNotEmpty == true) {
       params['search'] = search;
     }
     if (excludeId != null) {
-      // 👈 Предполагаем, что API использует 'exclude_id'
-      params['exclude_id'] = excludeId.toString();
+      params['exclude_id'] = excludeId!.toString();
     }
 
-    // --- 3. КАТЕГОРИИ ---
+    // --- 3. КАТЕГОРИИ и ЖАНРЫ ---
+    // Категория (ID)
     if (categoryId != null) {
-      params['category'] = categoryId.toString();
+      params['category_id'] = categoryId!.toString();
     }
-    if (categorySlug != null && categorySlug!.isNotEmpty) {
-      // 👈 Предполагаем, что API использует 'category__slug'
+    // Категория (Slug)
+    if (categorySlug?.isNotEmpty == true) {
       params['category__slug'] = categorySlug;
     }
-    if (genres.isNotEmpty) {
-      // Жанры объединяются через запятую
-      params['genre'] = genres.join(',');
+    // Жанры
+    if (genreIds.isNotEmpty) {
+      params['genre'] = genreIds.join(',');
     }
 
-    // --- 4. АТРИБУТЫ КНИГИ ---
-    if (authorName != null && authorName!.isNotEmpty) {
-      params['author'] = authorName;
+    // --- 4. НОВЫЕ ФИЛЬТРЫ ---
+    // Автор и Предмет
+    if (authorId != null) {
+      params['author'] = authorId!.toString();
     }
-    if (type != null && type!.isNotEmpty) {
+    if (subjectId != null) {
+      params['subject'] = subjectId!.toString();
+    }
+
+    // Язык
+    if (languageId?.isNotEmpty == true) {
+      params['language'] = languageId;
+    }
+
+    // --- 5. АТРИБУТЫ КНИГИ ---
+    if (type?.isNotEmpty == true) {
       params['type'] = type;
     }
-    if (yearFrom != null) {
-      params['year_from'] = yearFrom!.toString();
+    if (yearStart != null) {
+      params['year_from'] = yearStart!.toString();
     }
-    if (yearTo != null) {
-      params['year_to'] = yearTo!.toString();
+    if (yearEnd != null) {
+      params['year_to'] = yearEnd!.toString();
     }
+
+    // Очищаем от null-значений, которые Dio не должен обрабатывать
+    params.removeWhere((k, v) => v == null);
 
     return params;
   }

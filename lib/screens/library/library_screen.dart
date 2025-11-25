@@ -1,4 +1,5 @@
 import 'package:e_library/design/colors.dart';
+import 'package:e_library/screens/library/filter_screen.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'section_books_screen.dart'; // Экран "Смотреть все"
@@ -30,10 +31,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   // Флаги и состояние поиска
   bool _isSearching = false;
-  BookFilterModel _currentFilter = BookFilterModel();
+  BookFilterModel _currentFilter = const BookFilterModel();
 
-  // Добавьте импорт BookListResponse, если он не импортирован выше
-  Future<dynamic>? _searchResultsFuture;
+  // Используем BookListResponse для типа (предполагаем, что он доступен)
+  Future<BookListResponse>? _searchResultsFuture;
   Timer? _debounce;
 
   @override
@@ -54,8 +55,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void _runApiSearch(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
-    // Выход из режима поиска, если строка пуста
-    if (query.trim().isEmpty) {
+    // Выход из режима поиска, если строка пуста и нет активных фильтров
+    // ПРИМЕЧАНИЕ: isFilterActive() должно быть реализовано в BookFilterModel
+    if (query.trim().isEmpty && !_currentFilter.isFilterActive()) {
       setState(() {
         _isSearching = false;
         _searchResultsFuture = null;
@@ -65,16 +67,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     // Запускаем поиск через 300 мс после последнего ввода
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      // [ИСПРАВЛЕНИЕ: Добавляем .toLowerCase() для поиска без учета регистра]
       final String searchString = query.trim().toLowerCase();
-      final filter = BookFilterModel(search: searchString);
+
+      // Создаем новую модель, чтобы сбросить пагинацию и установить search
+      final newFilter = _currentFilter.copyWith(
+        search: searchString,
+        offset: 0,
+      );
 
       setState(() {
-        _isSearching = true;
+        _currentFilter = newFilter; // Обновляем текущий фильтр
+        _isSearching = true; // Переключаемся на отображение результатов поиска
+
+        // ✅ ИСПРАВЛЕНИЕ 1: Используем единый объект BookFilterModel
         _searchResultsFuture = _apiService.fetchBooksPage(
-          initialQueryParams: filter.toQueryParams(),
-          limit: 50,
-          offset: 0,
+          filter: _currentFilter.copyWith(
+            limit: 50,
+          ), // Устанавливаем лимит для поиска
         );
       });
     });
@@ -95,13 +104,47 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  void _handleFilterApplied(BookFilterModel newFilter) {
-    setState(() {
-      _currentFilter = newFilter;
-    });
-    // Если поиск активен, перезапускаем его с новым фильтром
-    if (_isSearching) {
-      _runApiSearch(_currentFilter.search ?? '');
+  // ********************************************
+  // * НОВЫЙ МЕТОД: Открытие экрана фильтрации и обработка результата
+  // ********************************************
+  void _openFilterScreen() async {
+    // Предполагается, что FilterScreen импортирован (добавил его выше)
+    final BookFilterModel? newFilter = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FilterScreen(initialFilter: _currentFilter),
+      ),
+    );
+
+    // 2. Если пользователь нажал "Сохранить" (т.е. newFilter не null)
+    if (newFilter != null && newFilter != _currentFilter) {
+      // 3. Обновляем текущий фильтр и сбрасываем пагинацию
+      setState(() {
+        _currentFilter = newFilter.copyWith(offset: 0);
+      });
+
+      // 4. ГЛАВНАЯ ЛОГИКА: Перезапускаем отображение с фильтром.
+
+      final bool hasTextSearch = newFilter.search?.isNotEmpty == true;
+      final bool hasOtherFilters = newFilter.isFilterActive(ignoreSearch: true);
+
+      // Если есть какой-либо активный фильтр (текст ИЛИ другие)
+      if (hasTextSearch || hasOtherFilters) {
+        setState(() {
+          _isSearching = true;
+          // ✅ ИСПРАВЛЕНИЕ 2: Используем единый объект BookFilterModel
+          _searchResultsFuture = _apiService.fetchBooksPage(
+            filter: _currentFilter.copyWith(limit: 50),
+          );
+        });
+
+        // Если фильтры сброшены (и _isSearching был активен), возвращаемся к обычному виду
+      } else if (_isSearching) {
+        setState(() {
+          _isSearching = false;
+          _searchResultsFuture = null;
+        });
+      }
     }
   }
 
@@ -123,13 +166,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
         SizedBox(
           height: 250,
-          child: FutureBuilder<dynamic>(
-            // Используем dynamic, чтобы избежать проблем с типами, если BookListResponse не импортирован
+          child: FutureBuilder<BookListResponse>(
+            // Используем BookListResponse для точного типа
             // Оборачиваем вызов Future в Future.delayed
             future: Future.delayed(Duration(milliseconds: delayMs), () {
+              // ✅ ИСПРАВЛЕНИЕ 3: Используем единый объект BookFilterModel
               return _apiService.fetchBooksPage(
-                initialQueryParams: section.filter.toQueryParams(),
-                limit: 10,
+                filter: section.filter.copyWith(
+                  limit: 10,
+                ), // Устанавливаем лимит для секции
               );
             }),
             builder: (context, snapshot) {
@@ -142,7 +187,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Text(
-                      'Ошибка загрузки: ${section.title} временно недоступна (503).',
+                      'Ошибка загрузки: ${section.title} временно недоступна.',
                       style: const TextStyle(color: Colors.red, fontSize: 12),
                       textAlign: TextAlign.center,
                     ),
@@ -156,7 +201,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 return const Center(child: Text('Книги не найдены.'));
               }
 
-              return BookList(books: books);
+              return BookList(
+                books: books as List<Book>,
+              ); // Приведение типа, если BookList ожидает List<Book>
             },
           ),
         ),
@@ -171,7 +218,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget _buildContent() {
     // 1. Если активен поиск, отображаем FutureBuilder с результатами
     if (_isSearching && _searchResultsFuture != null) {
-      return FutureBuilder<dynamic>(
+      return FutureBuilder<BookListResponse>(
+        // Используем точный тип
         future: _searchResultsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -187,7 +235,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           }
 
           final books = snapshot.data?.results ?? [];
-          return BookSearchResultsList(books: books);
+          return BookSearchResultsList(books: books as List<Book>);
         },
       );
     }
@@ -216,9 +264,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
         final List<SectionConfig> librarySections = categories.map((cat) {
           return SectionConfig(
             title: cat.name,
-            // ! КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Возвращаем поиск по имени.
-            // ! Это устранит проблемы, если API не принимает categoryId для фильтрации книг.
-            // ! (Требует Uri.encodeQueryComponent в BookFilterModel.toQueryParams())
+            // ! КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Мы используем cat.name для фильтрации,
+            // ! предполагая, что API фильтрует по имени категории,
+            // ! так как categoryId мог не работать в BookFilterModel.
             filter: BookFilterModel(search: cat.name),
           );
         }).toList();
@@ -260,8 +308,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
             // 1. Search bar + filter button
             LibrarySearchBar(
               onSearch: _runApiSearch, // Привязка к методу поиска API
-              currentFilter: _currentFilter,
-              onFilterApplied: _handleFilterApplied,
+              // ✅ НОВОЕ: Передаем метод, который открывает FilterScreen
+              onFilterPressed: _openFilterScreen,
             ),
 
             const SizedBox(height: 20),
@@ -277,6 +325,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
 // 🖼️ Виджет для отображения результатов поиска (оставлен без изменений)
 class BookSearchResultsList extends StatelessWidget {
+  // ... (остальная часть BookSearchResultsList не менялась)
   final List<Book> books;
 
   const BookSearchResultsList({super.key, required this.books});

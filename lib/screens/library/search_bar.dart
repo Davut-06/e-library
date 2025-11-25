@@ -1,21 +1,27 @@
 import 'package:flutter/material.dart';
-import '../library/filter_screen.dart';
+// import '../library/filter_screen.dart'; // ❌ УДАЛЕНО
 import 'package:e_library/design/colors.dart';
-import '../../models/book_filter_model.dart';
+// import '../../models/book_filter_model.dart'; // ❌ УДАЛЕНО
 
 class LibrarySearchBar extends StatefulWidget {
   final void Function(String query) onSearch;
   final TextEditingController? controller;
 
-  final BookFilterModel currentFilter;
-  final void Function(BookFilterModel newFilter) onFilterApplied;
+  // ✅ НОВЫЙ ОБЯЗАТЕЛЬНЫЙ ПАРАМЕТР
+  final VoidCallback onFilterPressed;
+
+  // ❌ УДАЛЕНЫ СТАРЫЕ ПОЛЯ:
+  // final BookFilterModel currentFilter;
+  // final void Function(BookFilterModel newFilter) onFilterApplied;
 
   const LibrarySearchBar({
     super.key,
     required this.onSearch,
     this.controller,
-    required this.currentFilter,
-    required this.onFilterApplied,
+    required this.onFilterPressed, // ✅ ДОБАВЛЕН
+    // ❌ УДАЛЕНЫ
+    // required this.currentFilter,
+    // required this.onFilterApplied,
   });
 
   @override
@@ -23,28 +29,22 @@ class LibrarySearchBar extends StatefulWidget {
 }
 
 class _LibrarySearchBarState extends State<LibrarySearchBar> {
-  // Используем внутренний контроллер, если внешний не передан
   late final TextEditingController _searchController;
 
   @override
   void initState() {
     super.initState();
-    // Инициализация контроллера: используем внешний, если он есть, иначе внутренний
     _searchController = widget.controller ?? TextEditingController();
-
-    // Слушаем изменения текста для показа/скрытия кнопки "Очистить"
     _searchController.addListener(_onTextChanged);
   }
 
   void _onTextChanged() {
-    // Перестраивает виджет, чтобы обновить suffixIcon
     setState(() {});
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onTextChanged);
-    // Если контроллер был внутренним, его нужно утилизировать.
     if (widget.controller == null) {
       _searchController.dispose();
     }
@@ -74,7 +74,6 @@ class _LibrarySearchBarState extends State<LibrarySearchBar> {
                   ? IconButton(
                       icon: const Icon(Icons.clear, color: Colors.grey),
                       onPressed: () {
-                        // ! ОЧИЩЕНИЕ
                         _searchController.clear();
                         widget.onSearch(
                           '',
@@ -106,22 +105,9 @@ class _LibrarySearchBarState extends State<LibrarySearchBar> {
         ),
         const SizedBox(width: 12),
         IconButton(
-          onPressed: () async {
-            // ! ЛОГИКА ОТКРЫТИЯ ФИЛЬТРА И ОБРАБОТКА РЕЗУЛЬТАТА
-            final BookFilterModel? newFilter =
-                await Navigator.push<BookFilterModel>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        FilterScreen(initialFilter: widget.currentFilter),
-                  ),
-                );
+          // ✅ ИСПРАВЛЕНИЕ: Вызываем переданный callback
+          onPressed: widget.onFilterPressed,
 
-            // Если результат получен, передаем его родителю
-            if (newFilter != null) {
-              widget.onFilterApplied(newFilter);
-            }
-          },
           // ⚠️ Если 'assets/icons/filter.jpg' не работает, замените на Icon(Icons.filter_list)
           icon: Image.asset('assets/icons/filter.jpg', width: 40, height: 40),
         ),

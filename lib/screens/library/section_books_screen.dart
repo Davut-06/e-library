@@ -8,6 +8,7 @@ import 'search_bar.dart';
 import '../../models/book_filter_model.dart';
 import '../../widgets/book_card.dart';
 import 'filter_screen.dart';
+import '../BookDetailScreen.dart'; // Предполагаемый импорт для навигации
 
 class SectionBooksScreen extends StatefulWidget {
   final String sectionTitle;
@@ -29,15 +30,19 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
   List<Book> _displayBooks = [];
   BookFilterModel _currentFilter = BookFilterModel();
   int _currentPageOffset = 0;
-  late final int _pageSize = _MAX_BOOK_LIMIT;
+  // NOTE: Используем _MAX_BOOK_LIMIT только для первой загрузки, затем _pageSize для пагинации
+  late final int _pageSize =
+      30; // Установим разумный размер страницы для последующих запросов.
   bool _isLoading = false;
   bool _hasMore = true;
   bool _isLocallySearching = false;
   Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
     _currentFilter = widget.initialFilter;
+    // Начинаем загрузку с начальным фильтром
     _loadNextPage();
     _searchController.addListener(_onSearchChanged);
   }
@@ -51,6 +56,7 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
   }
 
   bool _onNotification(ScrollNotification scrollInfo) {
+    // Триггер загрузки следующей страницы при прокрутке до 90%
     if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent * 0.9 &&
         !_isLoading &&
         _hasMore &&
@@ -63,7 +69,9 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
 
   Future<void> _loadNextPage({BookFilterModel? newFilter}) async {
     if (_isLoading) return;
+
     if (newFilter != null) {
+      // 1. Сброс состояния, если применен новый фильтр
       _currentFilter = newFilter;
       _allLoadedBooks = [];
       _currentPageOffset = 0;
@@ -71,25 +79,38 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
       _searchController.clear();
       _isLocallySearching = false;
     }
+
+    // Если книги уже загружены, а мы не сбрасывали фильтр, то не загружаем
     if (!_hasMore) return;
+
     setState(() {
       _isLoading = true;
     });
+
     try {
+      // Загружаем MAX_BOOK_LIMIT только в первый раз
+      // Последующие запросы будут использовать _pageSize
       final int limitForRequest = _currentPageOffset == 0
           ? _MAX_BOOK_LIMIT
           : _pageSize;
-      final Map<String, dynamic> params = _currentFilter.toQueryParams();
-      final response = await _apiService.fetchBooksPage(
-        initialQueryParams: params,
-        limit: limitForRequest,
+
+      // 1. Создаем единую модель фильтра для запроса, включая limit и offset
+      final BookFilterModel filterForRequest = _currentFilter.copyWith(
         offset: _currentPageOffset,
+        limit: limitForRequest,
       );
+
+      // 2. Используем новую сигнатуру с 'filter:'
+      final response = await _apiService.fetchBooksPage(
+        filter: filterForRequest,
+      );
+
       setState(() {
         _allLoadedBooks.addAll(response.results as List<Book>);
         _hasMore = response.results.length == limitForRequest;
         _currentPageOffset += limitForRequest;
         _isLoading = false;
+        // Применяем локальный поиск к новым данным
         _applyLocalSearch(_searchController.text);
       });
     } catch (e) {
@@ -111,6 +132,7 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
   }
 
   void _handleSearchQuery(String query) {
+    // Просто вызываем обработчик изменения текста, который включает debounce
     _onSearchChanged();
   }
 
@@ -122,47 +144,63 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
       final lowerCaseQuery = query.toLowerCase();
       _displayBooks = _allLoadedBooks.where((book) {
         final bookTitle = book.title.toLowerCase();
-        final bookAuthor = book.author.name.toLowerCase();
+
+        // ✅ ИСПРАВЛЕНИЕ NULL SAFETY: Используем ?. и ??
+        final bookAuthor = book.author?.name.toLowerCase() ?? '';
+
         return bookTitle.contains(lowerCaseQuery) ||
             bookAuthor.contains(lowerCaseQuery);
       }).toList();
     }
   }
 
-  Future<void> _openFilter(BuildContext context) async {
+  // ✅ МЕТОД ДЛЯ ОБРАБОТКИ КНОПКИ ФИЛЬТРА
+  Future<void> _onFilterPressed(BuildContext context) async {
     final result = await Navigator.push<BookFilterModel>(
       context,
       MaterialPageRoute(
         builder: (context) => FilterScreen(initialFilter: _currentFilter),
       ),
     );
-    if (result != null) {
-      _handleFilterApplied(result);
+
+    if (result != null && result != _currentFilter) {
+      // 🔑 Вызываем _loadNextPage для сброса данных и загрузки с новым фильтром
+      _loadNextPage(newFilter: result);
     }
   }
 
-  void _handleFilterApplied(BookFilterModel newFilter) {
-    _loadNextPage(newFilter: newFilter);
+  // ✅ Метод для навигации на экран деталей книги
+  void _navigateToBookDetailsScreen(BuildContext context, Book book) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => BookDetailScreen(book: book)),
+    );
   }
 
   Widget _buildContent() {
-    if (_allLoadedBooks.isEmpty && _isLoading) {
+    // Состояние: Первичная загрузка
+    if (_allLoadedBooks.isEmpty && _isLoading && !_isLocallySearching) {
       return Center(
         child: SpinKitFadingCircle(color: primaryColor, size: 50.0),
       );
     }
+
+    // Состояние: Нет результатов
     if (_displayBooks.isEmpty && !_isLoading) {
       final message = _isLocallySearching
           ? 'По вашему запросу ничего не найдено.'
           : 'Книги в этом разделе не найдены.';
       return Center(
-        child: Text(message, style: TextStyle(color: secondaryColor)),
+        child: Text(message, style: const TextStyle(color: secondaryColor)),
       );
     }
+
+    // Состояние: Отображение книг
     return GridView.builder(
       primary: false,
       shrinkWrap: true,
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0),
+      // Добавляем 1 для индикатора загрузки, если есть еще данные
       itemCount:
           _displayBooks.length + (_hasMore && !_isLocallySearching ? 1 : 0),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -172,6 +210,7 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
         mainAxisSpacing: 16.0,
       ),
       itemBuilder: (context, index) {
+        // Элемент: Индикатор загрузки
         if (index == _displayBooks.length) {
           return const Center(
             child: Padding(
@@ -180,8 +219,13 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
             ),
           );
         }
+
+        // Элемент: Карточка книги
         final book = _displayBooks[index];
-        return BookCard(book: book);
+        return GestureDetector(
+          onTap: () => _navigateToBookDetailsScreen(context, book),
+          child: BookCard(book: book),
+        );
       },
     );
   }
@@ -204,6 +248,7 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
           },
         ),
       ),
+      // Обертываем в NotificationListener для пагинации при прокрутке
       body: NotificationListener<ScrollNotification>(
         onNotification: _onNotification,
         child: Column(
@@ -213,12 +258,35 @@ class _SectionBooksScreenState extends State<SectionBooksScreen> {
               child: LibrarySearchBar(
                 onSearch: _handleSearchQuery,
                 controller: _searchController,
-                currentFilter: _currentFilter,
-                onFilterApplied: _handleFilterApplied,
+                // ✅ ПЕРЕДАЧА МЕТОДА ДЛЯ ОБРАБОТКИ КНОПКИ ФИЛЬТРА
+                onFilterPressed: () => _onFilterPressed(context),
               ),
             ),
             const SizedBox(height: 16),
-            Expanded(child: _buildContent()),
+            Expanded(
+              // Используем ListView, так как GridView.builder внутри _buildContent
+              // имеет shrinkWrap: true и его нужно обернуть в скроллящийся виджет
+              child: ListView(
+                children: [
+                  _buildContent(),
+                  // Если индикатор загрузки не встроен в GridView (что происходит, когда
+                  // книги уже есть, но идет дозагрузка), отображаем его здесь.
+                  // (В текущей реализации он встроен в GridView, но эта проверка полезна для отладки).
+                  if (_hasMore &&
+                      !_isLocallySearching &&
+                      _isLoading &&
+                      _allLoadedBooks.isNotEmpty)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+
+                  const SizedBox(height: 16), // Дополнительное место внизу
+                ],
+              ),
+            ),
           ],
         ),
       ),

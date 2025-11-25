@@ -19,19 +19,45 @@ class Author {
   }
 }
 
-// ! ИСПРАВЛЕННАЯ Модель для категории книги
+// ! ИСПРАВЛЕННАЯ Модель для категории книги (Slug теперь nullable)
 class BookCategory {
   final int id;
   final String name;
-  final String slug;
+  // Slug может быть null в заглушках или если отсутствует в API
+  final String? slug;
 
-  BookCategory({required this.name, required this.id, required this.slug});
+  BookCategory({required this.name, required this.id, this.slug});
 
   factory BookCategory.fromJson(Map<String, dynamic> json) {
     return BookCategory(
       id: _parseInt(json['id']),
       name: _asString(json['name'], fallback: 'Неизвестно'),
-      slug: _asString(json['slug'], fallback: 'unknown'),
+      // slug берется как String?, если _asString возвращает пустую строку ('')
+      slug: _asString(json['slug'], fallback: '').isEmpty
+          ? null
+          : _asString(json['slug']),
+    );
+  }
+}
+
+// Модель для опций фильтра (Авторы, Предметы, Жанры, Языки)
+class FilterOption {
+  final int id;
+  final String name;
+  final String? slug;
+
+  FilterOption({required this.id, required this.name, this.slug});
+
+  factory FilterOption.fromJson(Map<String, dynamic> json) {
+    return FilterOption(
+      // Часто ID называется 'pk' или 'id'
+      id: _parseInt(json['id'] ?? json['pk']),
+      // Название может быть 'name' или 'title'
+      name: _asString(json['name'] ?? json['title'], fallback: 'Неизвестно'),
+      // Slug может быть null
+      slug: _asString(json['slug'], fallback: '').isEmpty
+          ? null
+          : _asString(json['slug']),
     );
   }
 }
@@ -48,8 +74,10 @@ class Book {
   final int year;
   final int language;
   final int viewCount;
+  // Это поле уже было nullable, что корректно
   final String? fileUrl;
 
+  // Все поля, получающие значения через _asString с fallback, остаются required String
   Book({
     required this.id,
     required this.title,
@@ -84,6 +112,9 @@ class Book {
       parsedCategory = BookCategory(id: 0, name: 'Неизвестно', slug: 'unknown');
     }
 
+    // Обратите внимание: _asString гарантирует, что эти поля не будут null
+    // (они будут ' ' или 'Без названия' и т.д. в случае null),
+    // поэтому они могут оставаться required String в конструкторе.
     return Book(
       id: _parseInt(json['id']),
       title: _asString(json['name'], fallback: 'Без названия'),
@@ -105,6 +136,7 @@ class Book {
 // Модель для ответа API (контейнер, содержащий список в поле 'results')
 class BookListResponse {
   final int count;
+  // next и previous уже корректно объявлены как nullable String?
   final String? next;
   final String? previous;
   final List<Book> results;
@@ -118,7 +150,9 @@ class BookListResponse {
 
   factory BookListResponse.fromJson(Map<String, dynamic> json) {
     final resultsRaw = json['results'];
-    final List<dynamic> resultsList = resultsRaw is List ? resultsRaw : const [];
+    final List<dynamic> resultsList = resultsRaw is List
+        ? resultsRaw
+        : const [];
     final List<Book> books = resultsList
         .whereType<Map<String, dynamic>>()
         .map((item) => Book.fromJson(item))
@@ -126,6 +160,7 @@ class BookListResponse {
 
     return BookListResponse(
       count: _parseInt(json['count']),
+      // Значения next и previous уже корректно читаются как String?
       next: json['next'] as String?,
       previous: json['previous'] as String?,
       results: books,
@@ -133,12 +168,15 @@ class BookListResponse {
   }
 }
 
+// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+
 int _parseInt(dynamic value, {int fallback = 0}) {
   if (value is int) return value;
   if (value is String) return int.tryParse(value) ?? fallback;
   return fallback;
 }
 
+// _asString корректно возвращает не-null String (fallback)
 String _asString(dynamic value, {String fallback = ''}) {
   if (value is String) return value;
   if (value != null) return value.toString();

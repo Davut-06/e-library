@@ -61,7 +61,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     }
 
     final Uri? uri = Uri.tryParse(url);
-    // final bool canLaunch = await canLaunchUrl(uri!);
     if (uri != null) {
       await launchUrl(uri);
     } else {
@@ -78,8 +77,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       });
     }
   }
-
-  // import 'package:permission_handler/permission_handler.dart'; // Добавить импорт
 
   void _downloadBook(BuildContext context) async {
     final String? url = widget.book.fileUrl?.trim();
@@ -105,7 +102,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     }
 
     try {
-      // ⚠️ ИСПОЛЬЗУЕМ getDownloadsDirectory()
       final Directory? directory = await getDownloadsDirectory();
 
       if (directory == null) {
@@ -142,9 +138,13 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       // 3. Загрузка файла
       await widget._apiService.dio.download(
         url,
-        savePath, // <-- Теперь это папка Downloads
+        savePath,
         onReceiveProgress: (received, total) {
-          // ... (логика прогресса)
+          if (mounted && total != -1) {
+            setState(() {
+              _downloadProgress = received / total;
+            });
+          }
         },
       );
 
@@ -158,9 +158,17 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         );
       }
     } on DioException catch (e) {
-      // ... (Обработка ошибок)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка при загрузке: ${e.message}')),
+        );
+      }
     } catch (e) {
-      // ... (Обработка ошибок)
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Неизвестная ошибка: $e')));
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -271,7 +279,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               _buildMetadataRow('Author', book.author.name),
               _buildMetadataRow('Category', book.category.name),
               _buildMetadataRow('Year', book.year.toString()),
-              // Исправлено: Language ID на LanguageID для соответствия предыдущей реализации
               _buildMetadataRow('LanguageID', book.language.toString()),
               _buildMetadataRow('ViewCount', book.viewCount.toString()),
               const SizedBox(height: 15),
@@ -388,6 +395,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               MaterialPageRoute(
                 builder: (context) => SectionBooksScreen(
                   sectionTitle: 'Recommendations: ${widget.book.category.name}',
+                  // ✅ ИСПРАВЛЕНИЕ: Возвращено 'initialFilter' для устранения ошибки
                   initialFilter: filter,
                 ),
               ),
@@ -403,13 +411,15 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     final filter = BookFilterModel(
       categoryId: widget.book.category.id,
       excludeId: widget.book.id,
+      // Добавим лимит прямо в объект фильтра, чтобы избежать ошибки
+      limit: 10,
     );
     return SizedBox(
       height: 250,
       child: FutureBuilder<dynamic>(
         future: widget._apiService.fetchBooksPage(
-          initialQueryParams: filter.toQueryParams(),
-          limit: 10,
+          filter:
+              filter, // ✅ ИСПРАВЛЕНИЕ: Передаем объект BookFilterModel целиком
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -436,6 +446,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               final recommendedBook = recommendedBooks[index];
               return InkWell(
                 onTap: () {
+                  // При нажатии переходим к деталям новой книги (рекомендации)
                   Navigator.push(
                     context,
                     MaterialPageRoute(
